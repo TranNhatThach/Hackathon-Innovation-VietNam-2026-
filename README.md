@@ -79,9 +79,9 @@ The services will be available at:
 
 ## 👥 Members
 
-*   **Member 1** - [GitHub](https://github.com/) (Role/Task)
-*   **Member 2** - [GitHub](https://github.com/) (Role/Task)
-*   **Member 3** - [GitHub](https://github.com/) (Role/Task)
+*   **Tran Nhat Thach** - [GitHub](https://github.com/TranNhatThach) (Leader)
+*   **Tran Trung Hieu 2** - [GitHub](https://github.com/dat-nnguyen) (AI Developer)
+*   **Tuan Dat** - [GitHub](https://github.com/kutephomaique) (Fullstack Developer)
 
 ---
 

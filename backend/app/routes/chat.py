@@ -1,9 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends
+import logging
+from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+import uuid
 from agent import create_default_agent, check_emergency
+from backend.app.database import get_db
+from backend.app.services import ConversationService
+from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
 # Pre-instantiate General Agent
@@ -17,37 +23,121 @@ class ChatRequest(BaseModel):
     message: str
     history: Optional[List[ChatMessage]] = []
     stream: Optional[bool] = False
+    session_id: Optional[str] = None  # Client can provide session_id, or we generate one
+    user_id: Optional[str] = None  # Optional user identifier
 
 @router.post("")
-def chat_endpoint(request: ChatRequest):
+def chat_endpoint(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    x_forwarded_for: Optional[str] = Header(None)
+):
     """
-    Standard chat endpoint supporting direct text or streaming responses.
+    Chat endpoint with conversation history persistence.
+    
+    - If session_id is provided, messages are saved to existing conversation
+    - If not provided, a new session is created automatically
+    - All messages are persisted in PostgreSQL
+    - Previous history can be retrieved from DB (optional)
     """
-    # 1. Check emergency guardrail
+    # 1. Generate or use provided session_id
+    session_id = request.session_id or str(uuid.uuid4())
+    user_id = request.user_id or x_forwarded_for or "anonymous"
+    
+    # 2. Get or create conversation
+    conversation = ConversationService.get_conversation_by_session(db, session_id)
+    if not conversation:
+        conversation = ConversationService.create_conversation(
+            db, user_id, session_id
+        )
+    
+    # 3. Load history from DB if not provided by client
+    formatted_history = []
+    if request.history:
+        formatted_history = [{"role": msg.role, "content": msg.content} for msg in request.history]
+    else:
+        # Load from database if available
+        db_history = ConversationService.get_conversation_history(db, session_id, limit=20)
+        if db_history:
+            formatted_history = db_history
+    
+    # 4. Save user message to DB
+    ConversationService.add_message(db, session_id, "user", request.message)
+    
+    # 5. Check emergency guardrail
     emergency_warning = check_emergency(request.message)
     if emergency_warning:
+        # Save emergency response to DB
+        ConversationService.add_message(db, session_id, "assistant", emergency_warning)
         if request.stream:
             def event_generator():
                 yield emergency_warning
             return StreamingResponse(event_generator(), media_type="text/plain")
-        return {"response": emergency_warning}
+        return {
+            "response": emergency_warning,
+            "session_id": session_id,
+            "from_db": False
+        }
 
-    formatted_history = []
-    if request.history:
-        formatted_history = [{"role": msg.role, "content": msg.content} for msg in request.history]
-
+    # 6. Execute agent
     if request.stream:
         def event_generator():
             try:
+                full_response = ""
                 for chunk in agent.execute_stream(request.message, formatted_history):
+                    full_response += chunk
                     yield chunk
+                # Save full response to DB after streaming completes
+                ConversationService.add_message(db, session_id, "assistant", full_response)
             except Exception as e:
-                yield f"Error: {str(e)}"
+                error_msg = f"Error: {str(e)}"
+                yield error_msg
+                ConversationService.add_message(db, session_id, "assistant", error_msg)
+        
         return StreamingResponse(event_generator(), media_type="text/plain")
 
     try:
         response_text = agent.execute(request.message, formatted_history)
-        return {"response": response_text}
+        # Save response to DB
+        ConversationService.add_message(db, session_id, "assistant", response_text)
+        return {
+            "response": response_text,
+            "session_id": session_id,
+            "from_db": False
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        ConversationService.add_message(db, session_id, "assistant", error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+@router.get("/history/{session_id}")
+def get_chat_history(session_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve conversation history by session_id.
+    """
+    history = ConversationService.get_conversation_history(db, session_id)
+    if not history:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"session_id": session_id, "messages": history}
+
+
+@router.get("/conversations/{user_id}")
+def list_user_conversations(user_id: str, db: Session = Depends(get_db)):
+    """
+    List all conversations for a user.
+    """
+    conversations = ConversationService.get_user_conversations(db, user_id, limit=20)
+    return {"user_id": user_id, "conversations": conversations}
+
+
+@router.delete("/history/{session_id}")
+def delete_chat_history(session_id: str, db: Session = Depends(get_db)):
+    """
+    Delete a conversation and all its messages.
+    """
+    success = ConversationService.delete_conversation(db, session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"success": True, "message": "Conversation deleted"}
 

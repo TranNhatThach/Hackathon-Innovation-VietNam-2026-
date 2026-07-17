@@ -94,24 +94,35 @@ class ADKAgent:
         else:
             # Informational query, fetch context from Qdrant (threshold = 0.35)
             docs = retrieve_context(user_query, limit=3, threshold=0.35)
-            if not docs:
-                # No relevant documents found above threshold
-                return [], False
             
-            # Construct context-aware prompt
-            context_items = []
-            for doc in docs:
-                context_items.append(f"--- NGUỒN: {doc['title']} ---\n{doc['text']}")
-            context_str = "\n\n".join(context_items)
+            if docs:
+                # ✅ FOUND RELEVANT DOCUMENTS - Use strict RAG mode
+                # Construct context-aware prompt
+                context_items = []
+                for doc in docs:
+                    context_items.append(f"--- NGUỒN: {doc['title']} ---\n{doc['text']}")
+                context_str = "\n\n".join(context_items)
+                
+                system_prompt = (
+                    f"{self.system_instruction}\n\n"
+                    "## THÔNG TIN NGỮ CẢNH HỖ TRỢ (RAG):\n"
+                    "Bạn PHẢI trả lời câu hỏi dựa TRÊN VÀ CHỈ TRÊN các thông tin ngữ cảnh chính thức dưới đây. \n"
+                    "Khi trả lời, bạn PHẢI trích dẫn rõ nguồn từ phần nào của tài liệu (ví dụ: 'Theo phần [Quy định về Bảo hiểm Y tế (BHYT)]...' hoặc 'Theo bảng giá dịch vụ [Bảng giá Dịch vụ Khám bệnh thông dụng]...').\n"
+                    "Tuyệt đối không tự suy diễn hoặc bịa đặt thông tin y khoa, giá dịch vụ hay lịch khám nằm ngoài ngữ cảnh.\n\n"
+                    f"{context_str}"
+                )
+            else:
+                # ❌ NO RELEVANT DOCUMENTS - Use flexible mode (general knowledge + guardrails)
+                system_prompt = (
+                    f"{self.system_instruction}\n\n"
+                    "## LƯU Ý KỸ THUẬT:\n"
+                    "Không tìm thấy thông tin cụ thể về yêu cầu này trong cơ sở dữ liệu của Bệnh viện Tim Hà Nội.\n"
+                    "Bạn có thể:\n"
+                    "1. Trả lời dựa trên kiến thức chung về bệnh viện (giờ làm, hotline chung).\n"
+                    "2. Hướng dẫn người dùng liên hệ trực tiếp với các bộ phòng hoặc hotline để được hỗ trợ chính xác hơn.\n"
+                    "3. Không bịa đặt thông tin y khoa hay lịch khám cụ thể.\n"
+                )
             
-            system_prompt = (
-                f"{self.system_instruction}\n\n"
-                "## THÔNG TIN NGỮ CẢNH HỖ TRỢ (RAG):\n"
-                "Bạn PHẢI trả lời câu hỏi dựa TRÊN VÀ CHỈ TRÊN các thông tin ngữ cảnh chính thức dưới đây. \n"
-                "Khi trả lời, bạn PHẢI trích dẫn rõ nguồn từ phần nào của tài liệu (ví dụ: 'Theo phần [Quy định về Bảo hiểm Y tế (BHYT)]...' hoặc 'Theo bảng giá dịch vụ [Bảng giá Dịch vụ Khám bệnh thông dụng]...').\n"
-                "Tuyệt đối không tự suy diễn hoặc bịa đặt thông tin y khoa, giá dịch vụ hay lịch khám nằm ngoài ngữ cảnh.\n\n"
-                f"{context_str}"
-            )
             has_context = True
 
         messages = [

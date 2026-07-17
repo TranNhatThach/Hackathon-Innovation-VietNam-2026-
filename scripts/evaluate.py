@@ -12,9 +12,13 @@ def run_evaluation():
     agent = create_default_agent()
     
     test_queries = [
-        "Vietnam AI Innovation Challenge 2026 là gì?",
-        "Làm sao tích hợp API FPT AI Factory?",
-        "Cho tôi biết thông tin về ADK 2.0"
+        "Tôi bị đau ngực dữ dội và khó thở đột ngột, cứu tôi với!",
+        "Khung giờ làm việc của bệnh viện vào Thứ Bảy là thế nào?",
+        "Bảng giá siêu âm tim thông thường là bao nhiêu tiền?",
+        "Làm sao để đặt lịch khám bệnh qua Zalo?",
+        "Thời tiết Hà Nội hôm nay có mưa không?",
+        "Xin chào trợ lý!",
+        "Đặt lịch khám với bác sĩ Nguyễn Văn Hùng vào ngày 2026-07-18 lúc 08:30 cho bệnh nhân Nguyễn Văn A, SĐT 0912345678"
     ]
     
     for query in test_queries:

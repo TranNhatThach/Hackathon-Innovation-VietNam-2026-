@@ -1,73 +1,75 @@
 import React from 'react';
 import ChatInterface from './components/chat-interface';
-import { Award, Code2, Layers, Cpu } from 'lucide-react';
+import { Heart, Phone, MapPin, Activity } from 'lucide-react';
 
 function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-4 md:p-8">
-      {/* Top Banner / Navigation */}
-      <header className="w-full max-w-6xl flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+      {/* Hospital Brand Header */}
+      <header className="w-full max-w-4xl flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
         <div className="flex items-center space-x-3">
-          <div className="p-2 bg-violet-600/10 border border-violet-500/20 rounded-xl">
-            <Cpu className="w-8 h-8 text-violet-400" />
+          <div className="p-2.5 bg-rose-600/20 border border-rose-500/40 rounded-2xl animate-pulse">
+            <Heart className="w-8 h-8 text-rose-500 fill-rose-500/10" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-              AI Innovation Challenge
+            <h1 className="text-2xl font-black tracking-wider bg-gradient-to-r from-rose-400 via-slate-100 to-slate-300 bg-clip-text text-transparent uppercase">
+              Bệnh viện Tim Hà Nội
             </h1>
-            <p className="text-xs text-slate-400 font-mono">VIETNAM 2026 STARTER KIT</p>
+            <p className="text-xs text-rose-400/80 font-semibold uppercase tracking-widest flex items-center gap-1">
+              <Activity className="w-3.5 h-3.5" /> Hanoi Heart Hospital
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-full px-4 py-1.5 text-xs text-slate-300">
-          <Code2 className="w-4 h-4 text-cyan-400" />
-          <span>Frontend: <strong className="text-slate-100">React + Vite + Tailwind</strong></span>
+        <div className="flex items-center gap-2 bg-slate-900/80 border border-slate-800 rounded-full px-4 py-1.5 text-xs text-rose-400 font-medium">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+          <span>Trợ lý AI Đang hoạt động</span>
         </div>
       </header>
 
-      {/* Main Sandbox Section */}
-      <main className="w-full flex-1 flex flex-col items-center justify-center gap-8 my-4">
-        <div className="text-center max-w-2xl space-y-3">
-          <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">
-            AI-Native Sandbox Sandbox
+      {/* Main Chat Interface */}
+      <main className="w-full flex-1 flex flex-col items-center justify-center gap-6 my-2">
+        <div className="text-center max-w-xl space-y-2">
+          <h2 className="text-2xl font-extrabold tracking-tight">
+            Cổng Hỗ Trợ & Chăm Sóc Khách Hàng Tự Động
           </h2>
-          <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-            Quickly test prompts, vector search indexing, and integrations. This workspace connects directly to the <span className="text-cyan-400 font-semibold">FPT AI Factory API endpoint</span>.
+          <p className="text-slate-400 text-xs md:text-sm">
+            Giải đáp tự động các thông tin đặt lịch, quy trình khám bệnh, bảng giá dịch vụ, thủ tục BHYT và hỗ trợ hướng dẫn cấp cứu khẩn cấp.
           </p>
         </div>
 
-        {/* The Chat Application */}
+        {/* Chat Component */}
         <ChatInterface />
 
-        {/* Feature Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-4xl mt-4">
-          <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 space-y-2">
-            <Layers className="w-5 h-5 text-violet-400" />
-            <h4 className="font-semibold text-slate-200">Google ADK 2.0</h4>
-            <p className="text-xs text-slate-400">Structured prompt templates loading out of system, planner, and critic config markdown files.</p>
+        {/* Official Hospital Contact Info Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-4xl mt-2">
+          <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80 flex items-start space-x-3.5">
+            <MapPin className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-sm text-slate-200">Địa chỉ liên hệ</h4>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                <strong>Cơ sở 1:</strong> 92 Trần Hưng Đạo, Hoàn Kiếm, Hà Nội<br />
+                <strong>Cơ sở 2:</strong> Đường Võ Chí Công, Tây Hồ, Hà Nội
+              </p>
+            </div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 space-y-2">
-            <Award className="w-5 h-5 text-cyan-400" />
-            <h4 className="font-semibold text-slate-200">FPT Sponsored LLM</h4>
-            <p className="text-xs text-slate-400">Configured to authenticate and stream messages using FPT AI Factory high-performance API endpoints.</p>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 space-y-2">
-            <Cpu className="w-5 h-5 text-emerald-400" />
-            <h4 className="font-semibold text-slate-200">Fully Containerized</h4>
-            <p className="text-xs text-slate-400">Deploy vector databases (Qdrant), databases, and cache layers inside a single Docker network.</p>
+          <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/80 flex items-start space-x-3.5">
+            <Phone className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-sm text-slate-200">Đường dây nóng hỗ trợ</h4>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                <strong>Đặt lịch khám & CSKH:</strong> <span className="text-slate-100 font-semibold">1900 1234</span> (7:30 - 17:00)<br />
+                <strong>Khoa Cấp cứu (24/7):</strong> <span className="text-rose-400 font-bold">0243.8248362</span>
+              </p>
+            </div>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-6xl mt-12 border-t border-slate-900 pt-6 text-center text-xs text-slate-500 flex flex-col md:flex-row justify-between items-center gap-4">
-        <p>© 2026 Vietnam AI Innovation Challenge Team. All rights reserved.</p>
-        <div className="flex gap-4">
-          <a href="#readme" className="hover:text-slate-300">Documentation</a>
-          <a href="#github" className="hover:text-slate-300">GitHub Repo</a>
-        </div>
+      <footer className="w-full max-w-4xl mt-8 border-t border-slate-900/60 pt-4 text-center text-xs text-slate-500">
+        <p>© 2026 Bệnh viện Tim Hà Nội. Phát triển phục vụ cuộc thi Vietnam AI Innovation Challenge 2026.</p>
       </footer>
     </div>
   );

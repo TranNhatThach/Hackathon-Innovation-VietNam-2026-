@@ -87,3 +87,7 @@ The services will be available at:
 
 ## 📄 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+# GOAL 
+Develop an intelligent, trustworthy, and deployable AI Front Desk platform that assists patients throughout their healthcare journey by combining grounded medical knowledge, hospital system integration, task-oriented AI agents, and safety-first decision support.

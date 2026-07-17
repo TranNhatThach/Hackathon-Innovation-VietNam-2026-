@@ -1,7 +1,7 @@
 import json
 import httpx
 from typing import List, Dict, Any, Generator
-from agent.config import FPT_API_KEY, FPT_BASE_URL, FPT_MODEL
+from agent.core.config import FPT_API_KEY, FPT_BASE_URL, FPT_MODEL
 
 class FPTAIFactoryClient:
     """
@@ -17,22 +17,29 @@ class FPTAIFactoryClient:
             "Content-Type": "application/json"
         }
 
-    def chat_completion(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+    def chat_completion(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]] = None, temperature: float = 0.7) -> Dict[str, Any]:
         url = f"{self.base_url}/chat/completions"
         payload = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature
         }
+        if tools:
+            payload["tools"] = tools
         
         try:
             with httpx.Client(timeout=30.0) as client:
                 response = client.post(url, headers=self.headers, json=payload)
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                message = data["choices"][0]["message"]
+                
+                # Enforce fallback if message has empty content and no tool_calls
+                if not message.get("content") and not message.get("tool_calls"):
+                    message["content"] = message.get("reasoning_content") or "Xin chào! Tôi là Trợ lý AI của Bệnh viện Tim Hà Nội. Tôi có thể giúp gì cho bạn hôm nay?"
+                return message
         except Exception as e:
-            return f"Error communicating with FPT AI Factory: {str(e)}"
+            return {"role": "assistant", "content": f"Error communicating with FPT AI Factory: {str(e)}"}
 
     def chat_completion_stream(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> Generator[str, None, None]:
         url = f"{self.base_url}/chat/completions"
@@ -59,7 +66,7 @@ class FPTAIFactoryClient:
                                 content = chunk["choices"][0].get("delta", {}).get("content", "")
                                 if content:
                                     yield content
-                            except json.JSONDecodeError:
+                            except (json.JSONDecodeError, IndexError, KeyError):
                                 continue
         except Exception as e:
             yield f"Error in stream connection: {str(e)}"

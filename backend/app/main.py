@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.database import init_db
 from backend.app.routes.chat import get_orchestrator
 from backend.app.routes.chat import router as chat_router
 from backend.middleware.emergency import EmergencyFilterMiddleware
@@ -15,6 +16,7 @@ from backend.routers.voice import router as voice_router
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await init_db()
     yield
     if get_orchestrator.cache_info().currsize:
         await get_orchestrator().aclose()

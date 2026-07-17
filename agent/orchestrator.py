@@ -1,7 +1,8 @@
 import json
 import os
+import re
 import time
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 import httpx
@@ -12,7 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.config import FPT_API_KEY, FPT_BASE_URL, FPT_MODEL
+from agent.adk_agent import (
+    AgentDecision,
+    GovernedContext,
+    HospitalConciergeAgent,
+)
 from backend.models import ChatLog, ChatSession
 
 
@@ -24,48 +29,46 @@ FALLBACK_MESSAGE = (
     "Vui lòng liên hệ tổng đài Chăm sóc khách hàng của bệnh viện để được hỗ trợ."
 )
 
-GROUNDING_INSTRUCTION = """
-Bạn là trợ lý số của Bệnh viện Tim Hà Nội.
-Chỉ trả lời bằng OFFICIAL_CONTEXT đã được phê duyệt. Không sử dụng kiến thức Internet,
-kiến thức y khoa chung, hoặc suy đoán.
-Chỉ hỗ trợ các nhóm thông tin chính thức: đặt lịch khám, lịch bác sĩ, quy trình khám chữa bệnh,
-BHYT, bảng giá dịch vụ, nhập viện, tái khám, vị trí khoa phòng và giờ làm việc.
-Nếu OFFICIAL_CONTEXT không đủ để trả lời, hãy nói rõ thông tin chưa có trong nguồn chính thức.
-Không chẩn đoán, không kê đơn, không hướng dẫn xử trí cấp cứu.
-Viết tiếng Việt đơn giản, từng bước ngắn, phù hợp với người cao tuổi.
-Trả về JSON hợp lệ duy nhất theo định dạng:
-{"answer": "câu trả lời tiếng Việt", "confidence_score": 0.0}
-confidence_score phải nằm trong khoảng từ 0 đến 1.
-"""
+APPROVED_TOPICS = frozenset(
+    {
+        "appointment_booking",
+        "doctor_schedule",
+        "service_pricing",
+        "health_insurance",
+        "procedure_guidance",
+        "admission",
+        "follow_up",
+        "working_hours",
+        "location",
+    }
+)
 
-SERVICE_TOPICS = {"appointment_booking", "doctor_schedule", "service_pricing"}
-
-TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "appointment_booking": ("đặt lịch", "dat lich", "booking", "zalo", "website"),
-    "doctor_schedule": ("bác sĩ", "bac si", "lịch khám", "lich kham", "schedule"),
-    "service_pricing": ("giá", "gia", "chi phí", "chi phi", "pricing", "bảng giá"),
-    "health_insurance": ("bhyt", "bảo hiểm", "bao hiem", "insurance"),
-    "procedure_guidance": ("quy trình", "quy trinh", "thủ tục", "thu tuc", "procedure"),
-    "working_hours": ("giờ làm", "gio lam", "working hour", "mấy giờ"),
-    "location": ("địa chỉ", "dia chi", "ở đâu", "o dau", "location"),
+SERVICE_TOPICS = {
+    "appointment_booking",
+    "doctor_schedule",
+    "service_pricing",
+    "admission",
+    "follow_up",
 }
 
+TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "appointment_booking": ("đặt lịch", "dat lich", "booking", "zalo", "website", "hẹn khám"),
+    "doctor_schedule": ("bác sĩ", "bac si", "lịch khám", "lich kham", "schedule"),
+    "service_pricing": ("giá", "gia", "chi phí", "chi phi", "pricing", "bảng giá", "bang gia"),
+    "health_insurance": ("bhyt", "bảo hiểm", "bao hiem", "insurance"),
+    "procedure_guidance": ("quy trình", "quy trinh", "thủ tục", "thu tuc", "procedure"),
+    "admission": ("nhập viện", "nhap vien", "admission", "nội trú", "noi tru"),
+    "follow_up": ("tái khám", "tai kham", "follow-up", "follow up", "hẹn lại"),
+    "working_hours": ("giờ làm", "gio lam", "working hour", "mấy giờ", "may gio", "mở cửa"),
+    "location": ("địa chỉ", "dia chi", "ở đâu", "o dau", "location", "khoa", "phòng"),
+}
 
-class AgentDecision(BaseModel):
-    answer: str = Field(min_length=1)
-    confidence_score: float = Field(ge=0.0, le=1.0)
-
-
-class GovernedContext(BaseModel):
-    title: str
-    owner: str
-    approval_status: str
-    effective_date: date
-    review_date: date
-    version: str
-    version_history: list[dict[str, Any]]
-    content: str
-    score: float
+OUT_OF_SCOPE_PATTERN = re.compile(
+    r"(?:chẩn\s*đoán|kê\s*đơn|uống\s*thuốc|điều\s*trị|bệnh\s*gì|triệu\s*chứng|"
+    r"thuốc\s*gì|liều\s*lượng|"
+    r"diagnos|prescri|medication|treatment|symptom|dosage)",
+    flags=re.IGNORECASE | re.UNICODE,
+)
 
 
 class ChatResult(BaseModel):
@@ -76,114 +79,17 @@ class ChatResult(BaseModel):
     topic: str | None = None
 
 
-class FPTAIFactoryAsyncClient:
-    def __init__(
-        self,
-        *,
-        api_key: str,
-        base_url: str,
-        chat_model: str,
-        embedding_model: str,
-    ) -> None:
-        self._chat_model = chat_model
-        self._embedding_model = embedding_model
-        self._base_url = base_url.rstrip("/")
-        self._headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        self._client = httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0, connect=10.0),
-        )
-
-    async def embed(self, text: str) -> list[float]:
-        response = await self._client.post(
-            f"{self._base_url}/embeddings",
-            headers=self._headers,
-            json={
-                "model": self._embedding_model,
-                "input": text,
-            },
-        )
-        response.raise_for_status()
-
-        vector = response.json()["data"][0]["embedding"]
-        if not isinstance(vector, list) or not vector:
-            raise ValueError("FPT AI Factory returned an invalid embedding vector.")
-
-        return [float(value) for value in vector]
-
-    async def generate_grounded_answer(
-        self,
-        *,
-        user_message: str,
-        contexts: list[GovernedContext],
-    ) -> AgentDecision:
-        official_context = "\n\n".join(
-            (
-                f"[title={context.title}; owner={context.owner}; "
-                f"approval_status={context.approval_status}; "
-                f"effective_date={context.effective_date.isoformat()}; "
-                f"review_date={context.review_date.isoformat()}; "
-                f"version={context.version}; score={context.score:.3f}]\n"
-                f"{context.content}"
-            )
-            for context in contexts
-        )
-
-        response = await self._client.post(
-            f"{self._base_url}/chat/completions",
-            headers=self._headers,
-            json={
-                "model": self._chat_model,
-                "temperature": 0,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": GROUNDING_INSTRUCTION},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"OFFICIAL_CONTEXT:\n{official_context}\n\n"
-                            f"USER_MESSAGE:\n{user_message}"
-                        ),
-                    },
-                ],
-            },
-        )
-        response.raise_for_status()
-
-        raw_content = response.json()["choices"][0]["message"]["content"]
-        if not isinstance(raw_content, str):
-            raise ValueError("FPT AI Factory returned a non-text completion.")
-
-        normalized_content = raw_content.strip()
-        if normalized_content.startswith("```"):
-            normalized_content = normalized_content.removeprefix("```json")
-            normalized_content = normalized_content.removeprefix("```").strip()
-            if normalized_content.endswith("```"):
-                normalized_content = normalized_content[:-3].strip()
-
-        decision = AgentDecision.model_validate(json.loads(normalized_content))
-        if not decision.answer.strip():
-            raise ValueError("FPT AI Factory returned an empty answer.")
-
-        return decision
-
-    async def aclose(self) -> None:
-        await self._client.aclose()
-
-
 class HospitalRAGOrchestrator:
     def __init__(
         self,
         *,
         qdrant: AsyncQdrantClient,
-        fpt_client: FPTAIFactoryAsyncClient,
+        adk_agent: HospitalConciergeAgent,
         collection_name: str,
         minimum_similarity: float = 0.65,
     ) -> None:
         self._qdrant = qdrant
-        self._fpt_client = fpt_client
+        self._adk_agent = adk_agent
         self._collection_name = collection_name
         self._minimum_similarity = minimum_similarity
 
@@ -196,10 +102,10 @@ class HospitalRAGOrchestrator:
             timeout=10.0,
         )
 
-        fpt_client = FPTAIFactoryAsyncClient(
-            api_key=FPT_API_KEY,
-            base_url=FPT_BASE_URL,
-            chat_model=FPT_MODEL,
+        adk_agent = HospitalConciergeAgent(
+            api_key=os.getenv("FPT_AI_FACTORY_API_KEY", ""),
+            base_url=os.getenv("FPT_AI_FACTORY_BASE_URL", "https://api.fpt.ai/v1"),
+            chat_model=os.getenv("FPT_AI_FACTORY_MODEL", "gpt-4o-mini"),
             embedding_model=os.getenv(
                 "FPT_AI_FACTORY_EMBEDDING_MODEL",
                 "text-embedding-3-small",
@@ -208,7 +114,7 @@ class HospitalRAGOrchestrator:
 
         return cls(
             qdrant=qdrant,
-            fpt_client=fpt_client,
+            adk_agent=adk_agent,
             collection_name=os.getenv(
                 "QDRANT_COLLECTION_NAME",
                 "hospital_approved_documents",
@@ -224,6 +130,19 @@ class HospitalRAGOrchestrator:
     ) -> ChatResult:
         started_at = time.perf_counter()
         topic = self._classify_topic(user_message)
+
+        if self._is_out_of_scope(user_message):
+            return await self._persist_result(
+                db=db,
+                session_id=session_id,
+                user_message=user_message,
+                bot_response=FALLBACK_MESSAGE,
+                confidence_score=0.0,
+                escalation_flag=True,
+                unanswered_question_flag=True,
+                topic=topic,
+                latency_ms=self._elapsed_ms(started_at),
+            )
 
         try:
             contexts = await self._retrieve_governed_context(user_message)
@@ -244,7 +163,7 @@ class HospitalRAGOrchestrator:
             )
 
         try:
-            decision = await self._fpt_client.generate_grounded_answer(
+            decision = await self._adk_agent.generate_grounded_answer(
                 user_message=user_message,
                 contexts=contexts,
             )
@@ -261,7 +180,10 @@ class HospitalRAGOrchestrator:
                 latency_ms=self._elapsed_ms(started_at),
             )
 
-        escalation_flag = decision.confidence_score < CONFIDENCE_THRESHOLD
+        escalation_flag = (
+            decision.confidence_score < CONFIDENCE_THRESHOLD
+            or self._requires_escalation(topic, decision)
+        )
         bot_response = FALLBACK_MESSAGE if escalation_flag else decision.answer.strip()
 
         return await self._persist_result(
@@ -280,7 +202,7 @@ class HospitalRAGOrchestrator:
         self,
         user_message: str,
     ) -> list[GovernedContext]:
-        query_vector = await self._fpt_client.embed(user_message)
+        query_vector = await self._adk_agent.embed(user_message)
 
         hits = await self._qdrant.search(
             collection_name=self._collection_name,
@@ -385,7 +307,7 @@ class HospitalRAGOrchestrator:
         if chat_session is None:
             db.add(ChatSession(session_id=session_id))
         else:
-            chat_session.last_seen_at = datetime.now(UTC)
+            chat_session.last_seen_at = datetime.now(timezone.utc)
 
         db.add(
             ChatLog(
@@ -424,9 +346,27 @@ class HospitalRAGOrchestrator:
         return "other"
 
     @staticmethod
+    def _is_out_of_scope(user_message: str) -> bool:
+        return OUT_OF_SCOPE_PATTERN.search(user_message) is not None
+
+    @staticmethod
+    def _requires_escalation(topic: str, decision: AgentDecision) -> bool:
+        if topic != "other" and topic in APPROVED_TOPICS:
+            return False
+
+        unavailable_markers = (
+            "chưa có trong nguồn",
+            "không có thông tin",
+            "không thể xác nhận",
+            "chưa được phê duyệt",
+        )
+        normalized_answer = decision.answer.lower()
+        return any(marker in normalized_answer for marker in unavailable_markers)
+
+    @staticmethod
     def _elapsed_ms(started_at: float) -> int:
         return max(0, int((time.perf_counter() - started_at) * 1000))
 
     async def aclose(self) -> None:
-        await self._fpt_client.aclose()
+        await self._adk_agent.aclose()
         await self._qdrant.close()

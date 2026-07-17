@@ -42,3 +42,10 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+
+
+async def init_db() -> None:
+    import backend.models  # noqa: F401 — register SQLAlchemy models
+
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)

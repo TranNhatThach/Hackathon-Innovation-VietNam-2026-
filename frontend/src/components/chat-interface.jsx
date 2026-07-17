@@ -56,7 +56,7 @@ export default function ChatInterface() {
 
       const payload = await response.json();
       const emergencyMessage = payload.emergency
-        ? [payload.message, ...(payload.workflow || [])].join('\n')
+        ? [payload.message, ...(payload.instructions || payload.workflow || [])].join('\n')
         : payload.response;
 
       setMessages((prev) => {
@@ -68,7 +68,8 @@ export default function ChatInterface() {
       console.error('Error fetching chat response:', error);
       setMessages((prev) => {
         const updated = [...prev];
-        updated[assistantIndex].content = 'Có lỗi xảy ra khi kết nối tới Server AI. Vui lòng kiểm tra lại cấu hình API key.';
+        updated[assistantIndex].content =
+          'Không thể kết nối tới máy chủ. Vui lòng kiểm tra backend đang chạy tại http://localhost:8000.';
         return updated;
       });
     } finally {

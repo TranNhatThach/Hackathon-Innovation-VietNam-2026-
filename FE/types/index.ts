@@ -1,5 +1,5 @@
 export type LoadState = "ready" | "loading" | "empty" | "error";
-export type VisitStage = "ARRIVED" | "REGISTRATION" | "INSURANCE" | "PAYMENT" | "VITALS" | "WAITING_DOCTOR" | "CONSULTATION" | "TESTS" | "RESULTS" | "PHARMACY" | "COMPLETED";
+export type VisitStage = "WAITING_CHECKIN" | "WAITING_DOCTOR" | "IN_CONSULTATION" | "IN_EXAMINATION" | "WAITING_TESTS" | "WAITING_PAYMENT" | "COMPLETED";
 export type Priority = "P0" | "P1" | "P2" | "P3";
 export interface JourneyStep { id: VisitStage; label: string; status: "done" | "current" | "upcoming"; }
 export interface Visit {
@@ -7,16 +7,16 @@ export interface Visit {
   patientName: string;
   queueNumber: string;
   stage: VisitStage;
-  stageLabel: string;
-  enteredAt: string;
+  stageLabel?: string;
+  checkInTime: string;
   waitMinutes: number;
+  alerts: string[];
+  paymentType: "BHYT" | "Tiền mặt" | "Thẻ tín dụng";
+  paymentStatus: "Đã thanh toán" | "Chờ thanh toán";
+  priority?: "Bình thường" | "Ưu tiên";
   room?: string;
   doctor?: string;
-  paymentType: "BHYT" | "Dịch vụ";
-  paymentStatus: "Đã thanh toán" | "Chờ thanh toán";
-  priority: "Bình thường" | "Ưu tiên";
-  alerts: string[];
-  nextAction: string;
+  nextAction?: string;
 }
 export interface HumanCase {
   id: string;
@@ -27,12 +27,16 @@ export interface HumanCase {
   createdAt: string;
   slaDue: string;
   owner: string | null;
-  status: "Mở" | "Đã phân công" | "Đang xử lý" | "Chờ bệnh nhân" | "Đã chuyển cấp" | "Đã giải quyết";
+  status: "Mở" | "Đã phân công" | "Đang xử lý" | "Đã chuyển cấp" | "Đã giải quyết";
+  responsibleRole?: string;
+  staffActions?: string[];
+  note?: string;
 }
 export interface KanbanColumn {
-  id: VisitStage;
-  label: string;
-  shortLabel: string;
+  id: string;
+  title: string;
+  description: string;
+  shortLabel?: string;
 }
 export interface DashboardMetric {
   label: string;
@@ -54,15 +58,39 @@ export interface VisitCompanion {
 }
 export interface QuickAction { title: string; description: string; icon: IconName; href: string; }
 export interface Appointment {
-  id: string; date: string; time: string; facility: string; department: string;
-  doctor: string; patientDisplayName: string; visitType: string;
-  paymentType: "BHYT" | "Dịch vụ"; status: "Đã xác nhận" | "Chờ xác nhận" | "Đã hoàn thành";
+  id: string;
+  patientName: string;
+  patientId: string;
+  dateTime: Date;
+  date: string;
+  time: string;
+  doctor: string;
+  specialty: string;
+  department: string;
+  facility: string;
+  location: string;
+  status: "confirmed" | "pending" | "cancelled";
+  queueNumber: string;
+  paymentType: "BHYT" | "Dịch vụ";
+  visitType: string;
   documents: { label: string; ready: boolean }[];
+  notes?: string;
 }
 export interface Medication {
-  id: string; name: string; dosage: string; schedule: string; instruction: string;
-  period: string; status: "Sắp đến giờ" | "Đã ghi nhận" | "Chưa phản hồi";
-  time: string; approvedBy: string;
+  id: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  instructions: string;
+  daysRemaining: number;
+  nextTime: string;
+  taken: boolean;
+  time?: string;
+  status?: "Sắp đến giờ" | "Đã ghi nhận" | "Chưa phản hồi";
+  schedule?: string;
+  instruction?: string;
+  period?: string;
+  approvedBy?: string;
 }
 export interface ApiEnvelope<T> { requestId: string; timestamp: string; freshness: string; source: "MOCK"; data: T; }
 export type IconName = "heart" | "calendar" | "search" | "route" | "message" | "file" | "shield" | "flask" | "pill" | "phone" | "home" | "users" | "kanban" | "bot" | "book" | "chart" | "bell" | "settings" | "clock" | "map" | "help" | "arrow" | "check" | "alert" | "menu" | "close" | "filter" | "refresh" | "chevron" | "user" | "more" | "inbox";

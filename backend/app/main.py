@@ -1,14 +1,33 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.routes import chat
+
+from backend.app.routes.chat import get_orchestrator
+from backend.app.routes.chat import router as chat_router
+from backend.middleware.emergency import EmergencyFilterMiddleware
+from backend.routers.admin import router as admin_router
+from backend.routers.dashboard import router as dashboard_router
+from backend.routers.hospital_api import router as hospital_router
+from backend.routers.integration import router as integration_router
+from backend.routers.voice import router as voice_router
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    yield
+    if get_orchestrator.cache_info().currsize:
+        await get_orchestrator().aclose()
 
 app = FastAPI(
-    title="Vietnam AI Innovation Challenge 2026 API",
-    description="FastAPI Backend for Sponsor FPT AI Factory and Google ADK 2.0 Agent Stack",
-    version="1.0.0"
+    title="Hanoi Heart Hospital AI Patient Experience Platform",
+    description="Governed hospital concierge APIs and AI orchestration.",
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
-# CORS configuration for local development and container networking
+app.add_middleware(EmergencyFilterMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,15 +36,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routes
-app.include_router(chat.router)
+app.include_router(chat_router)
+app.include_router(hospital_router)
+app.include_router(admin_router)
+app.include_router(integration_router)
+app.include_router(dashboard_router)
+app.include_router(voice_router)
 
 @app.get("/")
-def read_root():
+async def read_root() -> dict[str, str]:
     return {
         "status": "healthy",
-        "message": "Vietnam AI Innovation Challenge 2026 Backend is running.",
-        "docs": "/docs"
+        "message": "Hanoi Heart Hospital AI Patient Experience Platform is running.",
+        "docs": "/docs",
     }
 
 if __name__ == "__main__":

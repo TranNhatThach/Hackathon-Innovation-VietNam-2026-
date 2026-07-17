@@ -50,7 +50,7 @@ function App() {
           <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 space-y-2">
             <Award className="w-5 h-5 text-cyan-400" />
             <h4 className="font-semibold text-slate-200">FPT Sponsored LLM</h4>
-            <p className="text-xs text-slate-400">Configured to authenticate and stream messages using FPT AI Factory high-performance API endpoints.</p>
+            <p className="text-xs text-slate-400">Grounded answers are verified against approved hospital information.</p>
           </div>
 
           <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/80 space-y-2">

@@ -3,11 +3,18 @@ import { Send, Bot, User, RefreshCw, Zap, ShieldCheck } from 'lucide-react';
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Xin chào! Tôi là Trợ lý AI đồng hành cùng bạn tại Vietnam AI Innovation Challenge 2026. Tôi có thể giúp gì cho bạn hôm nay?' }
+    { role: 'assistant', content: 'Xin chào! Tôi là Trợ lý số của Bệnh viện Tim Hà Nội. Tôi có thể giúp gì cho bạn hôm nay?' }
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const sessionIdRef = useRef(
+    window.localStorage.getItem('hospital-chat-session-id') || crypto.randomUUID()
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem('hospital-chat-session-id', sessionIdRef.current);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -26,7 +33,6 @@ export default function ChatInterface() {
     setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setLoading(true);
 
-    // Prepare message for streaming response
     const assistantIndex = messages.length + 1;
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
@@ -39,9 +45,8 @@ export default function ChatInterface() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          session_id: sessionIdRef.current,
           message: userMessage,
-          history: messages.slice(1).map(msg => ({ role: msg.role, content: msg.content })), // exclude initial greeting
-          stream: true
         }),
       });
 
@@ -49,23 +54,18 @@ export default function ChatInterface() {
         throw new Error('Network response was not ok');
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
+      const payload = await response.json();
+      const emergencyMessage = payload.emergency
+        ? [payload.message, ...(payload.workflow || [])].join('\n')
+        : payload.response;
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        const chunk = decoder.decode(value, { stream: !done });
-        
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[assistantIndex].content += chunk;
-          return updated;
-        });
-      }
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[assistantIndex].content = emergencyMessage;
+        return updated;
+      });
     } catch (error) {
-      console.error('Error fetching stream:', error);
+      console.error('Error fetching chat response:', error);
       setMessages((prev) => {
         const updated = [...prev];
         updated[assistantIndex].content = 'Có lỗi xảy ra khi kết nối tới Server AI. Vui lòng kiểm tra lại cấu hình API key.';

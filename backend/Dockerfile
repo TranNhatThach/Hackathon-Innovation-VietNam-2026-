@@ -2,12 +2,6 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies needed for compiling certain packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy requirements and install
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -16,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ /app/backend/
 COPY agent/ /app/agent/
 COPY prompts/ /app/prompts/
+COPY scripts/ /app/scripts/
 
 # Expose FastAPI default port
 EXPOSE 8000

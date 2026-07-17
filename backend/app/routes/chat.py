@@ -1,43 +1,37 @@
-from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import List, Dict, Optional
-from agent import create_default_agent
+from functools import lru_cache
+from typing import Annotated
 
-router = APIRouter(prefix="/api/chat", tags=["Chat"])
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Pre-instantiate General Agent
-agent = create_default_agent()
+from agent.orchestrator import ChatResult, HospitalRAGOrchestrator
+from backend.app.database import get_db
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
+
+router = APIRouter(tags=["Chat"])
+
+DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
+
 
 class ChatRequest(BaseModel):
-    message: str
-    history: Optional[List[ChatMessage]] = []
-    stream: Optional[bool] = False
+    session_id: str = Field(min_length=1, max_length=128)
+    message: str = Field(min_length=1, max_length=10_000)
 
-@router.post("")
-def chat_endpoint(request: ChatRequest):
-    """
-    Standard chat endpoint supporting direct text or streaming responses.
-    """
-    formatted_history = []
-    if request.history:
-        formatted_history = [{"role": msg.role, "content": msg.content} for msg in request.history]
 
-    if request.stream:
-        def event_generator():
-            try:
-                for chunk in agent.execute_stream(request.message, formatted_history):
-                    yield chunk
-            except Exception as e:
-                yield f"Error: {str(e)}"
-        return StreamingResponse(event_generator(), media_type="text/plain")
+@lru_cache
+def get_orchestrator() -> HospitalRAGOrchestrator:
+    return HospitalRAGOrchestrator.from_environment()
 
-    try:
-        response_text = agent.execute(request.message, formatted_history)
-        return {"response": response_text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/chat", response_model=ChatResult)
+@router.post("/api/chat", response_model=ChatResult, include_in_schema=False)
+async def chat_endpoint(
+    request: ChatRequest,
+    db: DatabaseSession,
+) -> ChatResult:
+    return await get_orchestrator().handle_chat(
+        db=db,
+        session_id=request.session_id,
+        user_message=request.message,
+    )

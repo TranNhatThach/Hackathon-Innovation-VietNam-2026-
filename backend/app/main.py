@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.routes import chat
+from backend.app.routes import chat, documents
 
 app = FastAPI(
     title="Vietnam AI Innovation Challenge 2026 API",
@@ -19,6 +19,7 @@ app.add_middleware(
 
 # Register routes
 app.include_router(chat.router)
+app.include_router(documents.router)
 
 @app.get("/")
 def read_root():

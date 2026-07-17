@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-from agent import create_default_agent
+from agent import create_default_agent, check_emergency
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
@@ -23,6 +23,15 @@ def chat_endpoint(request: ChatRequest):
     """
     Standard chat endpoint supporting direct text or streaming responses.
     """
+    # 1. Check emergency guardrail
+    emergency_warning = check_emergency(request.message)
+    if emergency_warning:
+        if request.stream:
+            def event_generator():
+                yield emergency_warning
+            return StreamingResponse(event_generator(), media_type="text/plain")
+        return {"response": emergency_warning}
+
     formatted_history = []
     if request.history:
         formatted_history = [{"role": msg.role, "content": msg.content} for msg in request.history]
@@ -41,3 +50,4 @@ def chat_endpoint(request: ChatRequest):
         return {"response": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

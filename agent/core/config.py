@@ -4,8 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Project root path
-ROOT_DIR = Path(__file__).parent.parent
+# Project root path (3 levels up from agent/core/config.py)
+ROOT_DIR = Path(__file__).parent.parent.parent
 
 # FPT AI Factory Configuration
 FPT_API_KEY = os.getenv("FPT_AI_FACTORY_API_KEY", "")

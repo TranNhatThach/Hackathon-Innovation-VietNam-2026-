@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 
-# Pre-instantiate General Agent
-agent = create_default_agent()
+# Pre-instantiate General Agents
+patient_agent = create_default_agent("system.md")
+employee_agent = create_default_agent("employee.md")
 
 class ChatMessage(BaseModel):
     role: str
@@ -25,6 +26,7 @@ class ChatRequest(BaseModel):
     stream: Optional[bool] = False
     session_id: Optional[str] = None  # Client can provide session_id, or we generate one
     user_id: Optional[str] = None  # Optional user identifier
+    agent_type: Optional[str] = "patient"  # "patient" or "employee"
 
 @router.post("")
 def chat_endpoint(
@@ -40,7 +42,10 @@ def chat_endpoint(
     - All messages are persisted in PostgreSQL
     - Previous history can be retrieved from DB (optional)
     """
-    # 1. Generate or use provided session_id
+    # 1. Select the correct agent instance based on request
+    agent = employee_agent if request.agent_type == "employee" else patient_agent
+
+    # 2. Generate or use provided session_id
     session_id = request.session_id or str(uuid.uuid4())
     user_id = request.user_id or x_forwarded_for or "anonymous"
     

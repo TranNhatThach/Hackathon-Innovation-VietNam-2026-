@@ -13,6 +13,7 @@ services:
     environment:
       - VITE_API_URL=http://localhost:${BACKEND_PORT:-8000}
       - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}
+      - NEXT_TELEMETRY_DISABLED=1
     depends_on:
       - backend
 

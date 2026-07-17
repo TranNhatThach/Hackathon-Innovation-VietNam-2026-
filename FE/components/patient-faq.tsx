@@ -38,7 +38,8 @@ export function PatientFaq() {
         body: JSON.stringify({
           message: queryText,
           history: [],
-          stream: true
+          stream: true,
+          agent_type: "patient"
         }),
       });
 

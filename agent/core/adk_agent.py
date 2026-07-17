@@ -224,8 +224,8 @@ class ADKAgent:
         return error_generator()
 
 # Example Instantiation of standard agents
-def create_default_agent() -> ADKAgent:
-    agent = ADKAgent(name="GeneralAgent", system_prompt_file="system.md")
+def create_default_agent(system_prompt_file: str = "system.md") -> ADKAgent:
+    agent = ADKAgent(name="GeneralAgent", system_prompt_file=system_prompt_file)
     
     # Import mock functions from agent.tools.tools
     from agent.tools.tools import get_doctor_schedule, book_appointment

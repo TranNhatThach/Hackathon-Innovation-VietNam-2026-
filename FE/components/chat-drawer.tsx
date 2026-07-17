@@ -67,7 +67,8 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
         body: JSON.stringify({
           message: text,
           history: messages.map(msg => ({ role: msg.role, content: msg.content })),
-          stream: true
+          stream: true,
+          agent_type: "employee"
         }),
       });
 

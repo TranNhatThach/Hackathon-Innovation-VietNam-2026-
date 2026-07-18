@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd FE && npm run build",
-  "outputDirectory": "FE/.next",
-  "cleanUrls": true,
-  "trailingSlash": true
-}

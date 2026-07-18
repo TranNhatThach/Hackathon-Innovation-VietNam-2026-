@@ -11,12 +11,20 @@ COLLECTION_NAME = "hackathon_docs"
 
 # Initialize Qdrant Client
 api_key = QDRANT_API_KEY if QDRANT_API_KEY and not QDRANT_API_KEY.startswith("optional") else None
-qdrant_client = QdrantClient(
-    host=QDRANT_HOST, 
-    port=QDRANT_PORT, 
-    api_key=api_key,
-    https=False
-)
+
+if QDRANT_HOST.startswith(("http://", "https://")):
+    qdrant_client = QdrantClient(
+        url=QDRANT_HOST,
+        api_key=api_key
+    )
+else:
+    use_https = (QDRANT_PORT == 443) or ("qdrant.io" in QDRANT_HOST)
+    qdrant_client = QdrantClient(
+        host=QDRANT_HOST, 
+        port=QDRANT_PORT, 
+        api_key=api_key,
+        https=use_https
+    )
 
 def init_qdrant_collection():
     """

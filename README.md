@@ -241,8 +241,10 @@ make evaluate
 ## 👥 Members & Contributors
 
 * **Tran Nhat Thach** - [GitHub](https://github.com/TranNhatThach) (Team Lead)
-* **Tran Trung Hieu 2** - [GitHub](https://github.com/dat-nnguyen) (AI Engineer / Backend Developer)
-* **Tuan Dat** - [GitHub](https://github.com/kutephomaique) (Frontend Engineer / Fullstack Developer)
+* **Nguyen Ngoc Minh Tam** - [GitHub](https://github.com/taminguyen04) (Project Manager)
+* **Tran Trung Hieu** - [GitHub](https://github.com/dat-nnguyen) (AI Engineer / Backend Developer)
+* **Nguyen Tuan Dat** - [GitHub](https://github.com/kutephomaique) (Frontend Engineer / Fullstack Developer)
+
 
 ---
 

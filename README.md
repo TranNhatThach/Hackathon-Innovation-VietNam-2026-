@@ -174,8 +174,10 @@ cp .env.example .env
 ```
 Fill in the API keys provided by the challenge sponsors:
 * `FPT_AI_FACTORY_API_KEY`: API key for FPT AI Factory.
-* `FPT_AI_FACTORY_BASE_URL`: Endpoint url (usually `https://api.fpt.ai/v1`).
+* `FPT_AI_FACTORY_BASE_URL`: Endpoint url (usually `https://mkp-api.fptcloud.com`).
 * `FPT_AI_FACTORY_MODEL`: The LLM name supplied at the event.
+* `DEEPGRAM_API_KEY`: API key for Deepgram (for STT).
+* `ENCRYPTION_KEY`: A random secure key for column-level patient data encryption.
 
 ### 3. Launch the Stack
 Start all services (Next.js, FastAPI, PostgreSQL, Redis, Qdrant) in detached mode:
@@ -244,17 +246,18 @@ make evaluate
 
 ---
 
-## 🎙️ Speech Integration Roadmap (TTS & STT)
+## 🎙️ Speech & Voice Interaction (TTS & STT)
 
-The platform is architected to easily integrate voice features. Here is how you can merge speech capabilities (Text-to-Speech and Speech-to-Text):
+The platform is fully integrated with speech capabilities to support complete voice conversations:
 
 ### 1. Speech-to-Text (STT) - User Voice Input
-*   **Frontend Integration**: Install an audio recording widget (e.g. using Web Audio API or standard library like `react-media-recorder`) in the chat bar of the Patient Homepage ([HomeChat](file:///d:/Code/Hackathon/project/FE/components/patient/home-chat.tsx)) or AI Assistant page.
-*   **Backend Integration**: Send the audio payload (.wav or .mp3) to a FastAPI route `/api/speech/stt`. Use FPT AI Factory's Speech Recognition API to convert audio to text, then pass the transcribed text directly to the existing `/api/chat` router.
+*   **Real-time Streaming STT**: Uses a custom WebSocket endpoint `/api/v1/stt/stream` proxying audio chunks to Deepgram API (Nova-3 model, Vietnamese language) for real-time transcription.
+*   **File-based STT**: Accepts uploaded audio files via `POST /api/v1/stt` and returns the transcribed text.
+*   **Frontend Integration**: Handled by custom React hooks (`useSTT.ts`) and user microphone controls integrated into the Patient FAQ chat Drawer.
 
 ### 2. Text-to-Speech (TTS) - Agent Voice Response
-*   **Backend Integration**: Implement a route `/api/speech/tts` that accepts text and converts it to audio using FPT AI Factory's Text-to-Speech engine (e.g., standard voice models like BanMai, CaoBong).
-*   **Frontend Integration**: The chat assistant can automatically play the audio stream using HTML5 `<audio>` elements when the AI Agent returns responses, providing a complete voice-interactive hospital front-desk experience.
+*   **WAV Audio Synthesis**: Converts AI Agent responses to audio files via `POST /api/v1/tts` using FPT AI Factory's Text-to-Speech API (`FPT.AI-VITs` model with premium voice configurations).
+*   **Frontend Integration**: Handled by custom React hooks (`useTTS.ts`) playing the synthesized audio stream directly via Web Audio elements.
 
 ---
 

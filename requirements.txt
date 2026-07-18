@@ -1,0 +1,14 @@
+# Root-level requirements for local development (without Docker)
+# Install with: pip install -r requirements.txt
+
+# ── Backend (FastAPI server) ──────────────────────────────────────────────────
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+sqlalchemy==2.0.27
+psycopg2-binary==2.9.9
+redis==5.0.1
+qdrant-client==1.9.1
+httpx==0.27.0
+pydantic==2.6.1
+python-dotenv==1.0.1
+python-multipart==0.0.9

@@ -81,14 +81,23 @@ class ADKAgent:
             system_prompt = self.system_instruction
             has_context = True
         # Check if query is looking for booking/appointment actions (so it bypasses RAG fallback check)
-        elif any(kw in user_query.lower() for kw in ["đặt lịch", "dat lich", "hẹn khám", "hen kham", "lịch bác sĩ", "lich bac si"]):
-            # Booking queries will use Tools, so we don't enforce RAG document matching
+        elif any(kw in user_query.lower() for kw in [
+            "đặt lịch", "dat lich", "hẹn khám", "hen kham",
+            "lịch bác sĩ", "lich bac si", "lịch khám", "lich kham",
+            "bác sĩ nào", "bac si nao", "tìm bác sĩ", "tim bac si",
+            "danh sách bác sĩ", "ds bac si", "chuyên khoa", "chuyen khoa",
+            "khung giờ", "khung gio", "còn trống", "con trong",
+        ]):
+            # Booking/scheduling/doctor-search queries will use Tools
             system_prompt = (
                 f"{self.system_instruction}\n\n"
                 "## HƯỚNG DẪN SỬ DỤNG CÔNG CỤ (TOOLS):\n"
-                "Bạn có quyền truy cập các công cụ hỗ trợ đăng ký đặt lịch khám và tra cứu lịch bác sĩ. \n"
-                "Khi người dùng yêu cầu đặt lịch hẹn hoặc kiểm tra lịch của bác sĩ, bạn PHẢI sử dụng công cụ tương ứng (get_doctor_schedule hoặc book_appointment) để lấy dữ liệu hoặc thực hiện hành động. \n"
-                "Tuyệt đối không trả lời từ chối hoặc báo không tìm thấy thông tin trước khi gọi công cụ."
+                "Bạn có quyền truy cập các công cụ hỗ trợ tra cứu, đăng ký đặt lịch khám và tìm kiếm bác sĩ.\n"
+                "- Dùng `search_doctors` khi người dùng hỏi về danh sách bác sĩ, chuyên khoa, hoặc muốn tìm bác sĩ phù hợp.\n"
+                "- Dùng `get_doctor_schedule` khi người dùng hỏi về lịch trống của một bác sĩ vào một ngày cụ thể.\n"
+                "- Dùng `book_appointment` khi người dùng muốn xác nhận đặt lịch (đã có tên bác sĩ, ngày, giờ, tên bệnh nhân và SĐT).\n"
+                "TUYỆT ĐỐI không từ chối hoặc báo không tìm thấy thông tin trước khi đã gọi công cụ phù hợp.\n"
+                "Nếu thiếu thông tin để gọi công cụ, hãy hỏi người dùng từng bước."
             )
             has_context = True
         else:
@@ -189,21 +198,27 @@ class ADKAgent:
                 yield FALLBACK_RESPONSE
             return fallback_generator()
             
-        # Tool execution loop
+        # Tool execution loop (non-streaming until tool calls resolve)
         for _ in range(5):
             tools_schema = [t.to_openai_schema() for t in self.tools if hasattr(t, "to_openai_schema")]
             message = self.client.chat_completion(messages, tools=tools_schema if tools_schema else None)
             tool_calls = message.get("tool_calls")
             if not tool_calls:
-                # No more tool calls, stream the final text response!
+                # No more tool calls — stream the final answer.
+                # IMPORTANT: append the last assistant message first so the LLM has full context
+                messages.append(message)
                 return self.client.chat_completion_stream(messages)
-            
+
+            # Append assistant message with tool_calls before processing them
             messages.append(message)
             for tool_call in tool_calls:
                 func_name = tool_call["function"]["name"]
-                func_args = json.loads(tool_call["function"]["arguments"])
+                try:
+                    func_args = json.loads(tool_call["function"]["arguments"])
+                except json.JSONDecodeError:
+                    func_args = {}
                 tool_call_id = tool_call.get("id")
-                
+
                 if func_name in self.tool_map:
                     try:
                         result = self.tool_map[func_name].run(**func_args)
@@ -211,36 +226,66 @@ class ADKAgent:
                         result = f"Error executing tool {func_name}: {str(e)}"
                 else:
                     result = f"Tool {func_name} not found."
-                
+
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tool_call_id,
                     "name": func_name,
                     "content": result
                 })
-        
-        def error_generator():
-            yield "Xin lỗi, đã xảy ra lỗi vòng lặp xử lý cuộc gọi công cụ quá giới hạn."
-        return error_generator()
+
+        def loop_exceeded_generator():
+            yield "Xin lỗi, đã xảy ra lỗi vòng lặp xử lý công cụ quá giới hạn."
+        return loop_exceeded_generator()
+
+
 
 # Example Instantiation of standard agents
 def create_default_agent(system_prompt_file: str = "system.md") -> ADKAgent:
     agent = ADKAgent(name="GeneralAgent", system_prompt_file=system_prompt_file)
-    
-    # Import mock functions from agent.tools.tools
-    from agent.tools.tools import get_doctor_schedule, book_appointment
-    
-    # Register doctor schedule tool
+
+    # Import tool functions from agent.tools.tools
+    from agent.tools.tools import get_doctor_schedule, book_appointment, search_doctors
+
+    # Tool 1: Search doctors by specialty or name
+    search_tool = Tool(
+        name="search_doctors",
+        func=search_doctors,
+        description=(
+            "Tìm kiếm bác sĩ tại Bệnh viện Tim Hà Nội theo chuyên khoa hoặc tên. "
+            "Dùng khi bệnh nhân hỏi 'bác sĩ nào chuyên về X?', 'danh sách bác sĩ', 'tìm bác sĩ tim mạch Nhi', v.v."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "specialty": {
+                    "type": "string",
+                    "description": "Từ khóa chuyên khoa cần tìm (ví dụ: 'rối loạn nhịp', 'tim mạch nhi', 'can thiệp', 'phẫu thuật'). Để trống nếu không lọc theo chuyên khoa."
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Tên bác sĩ cần tìm (ví dụ: 'Lan', 'Hùng'). Để trống nếu không lọc theo tên."
+                }
+            },
+            "required": []
+        }
+    )
+    agent.register_tool(search_tool)
+
+    # Tool 2: Get doctor schedule for a specific date
     schedule_tool = Tool(
         name="get_doctor_schedule",
         func=get_doctor_schedule,
-        description="Tra cứu các khung giờ làm việc còn trống của bác sĩ tại Bệnh viện Tim Hà Nội dựa trên tên bác sĩ và ngày khám.",
+        description=(
+            "Tra cứu các khung giờ làm việc còn trống của bác sĩ tại Bệnh viện Tim Hà Nội "
+            "dựa trên tên bác sĩ và ngày khám. Dùng khi bệnh nhân hỏi lịch khám của bác sĩ cụ thể."
+        ),
         parameters={
             "type": "object",
             "properties": {
                 "doctor_name": {
                     "type": "string",
-                    "description": "Tên bác sĩ cần tra cứu (ví dụ: BS Hùng, BS Lan)"
+                    "description": "Tên bác sĩ cần tra cứu (ví dụ: 'BS Hùng', 'Trần Thị Lan', 'Lê Minh Tuấn')"
                 },
                 "date": {
                     "type": "string",
@@ -251,12 +296,15 @@ def create_default_agent(system_prompt_file: str = "system.md") -> ADKAgent:
         }
     )
     agent.register_tool(schedule_tool)
-    
-    # Register booking tool
+
+    # Tool 3: Book an appointment
     booking_tool = Tool(
         name="book_appointment",
         func=book_appointment,
-        description="Đăng ký đặt lịch hẹn khám bệnh cho bệnh nhân tại Bệnh viện Tim Hà Nội.",
+        description=(
+            "Đăng ký đặt lịch hẹn khám bệnh chính thức cho bệnh nhân tại Bệnh viện Tim Hà Nội. "
+            "Chỉ gọi tool này khi đã có đủ: tên bệnh nhân, số điện thoại, tên bác sĩ, ngày và khung giờ cụ thể."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -266,11 +314,11 @@ def create_default_agent(system_prompt_file: str = "system.md") -> ADKAgent:
                 },
                 "phone": {
                     "type": "string",
-                    "description": "Số điện thoại liên hệ của bệnh nhân"
+                    "description": "Số điện thoại liên hệ của bệnh nhân (10-11 chữ số)"
                 },
                 "doctor_name": {
                     "type": "string",
-                    "description": "Tên bác sĩ khám bệnh"
+                    "description": "Tên bác sĩ khám bệnh (ví dụ: 'Nguyễn Văn Hùng', 'BS Lan')"
                 },
                 "date": {
                     "type": "string",
@@ -278,12 +326,12 @@ def create_default_agent(system_prompt_file: str = "system.md") -> ADKAgent:
                 },
                 "time_slot": {
                     "type": "string",
-                    "description": "Khung giờ khám bệnh lựa chọn (ví dụ: 08:30 - 09:00)"
+                    "description": "Khung giờ khám bệnh đã chọn (ví dụ: '08:30 - 09:00')"
                 }
             },
             "required": ["patient_name", "phone", "doctor_name", "date", "time_slot"]
         }
     )
     agent.register_tool(booking_tool)
-    
+
     return agent

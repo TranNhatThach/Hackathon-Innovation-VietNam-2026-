@@ -8,7 +8,7 @@ load_dotenv()
 ROOT_DIR = Path(__file__).parent.parent.parent
 
 # FPT AI Factory Configuration
-FPT_API_KEY = os.getenv("FPT_AI_FACTORY_API_KEY", "")
+FPT_API_KEY = os.getenv("FPT_AI_FACTORY_API_KEY")
 FPT_BASE_URL = os.getenv("FPT_AI_FACTORY_BASE_URL", "https://api.fpt.ai/v1")
 FPT_MODEL = os.getenv("FPT_AI_FACTORY_MODEL", "gpt-4o-mini")
 

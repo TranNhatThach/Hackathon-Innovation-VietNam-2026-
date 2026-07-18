@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env*.local
+.agents
+ProjectContext.md
+node_modules
+**/node_modules
+.next
+**/.next
+postgres_data
+qdrant_storage
+redis_data
+*.log

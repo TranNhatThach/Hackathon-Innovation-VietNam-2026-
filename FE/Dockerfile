@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+# Add compatibility libraries for native SWC compilation
+RUN apk add --no-cache libc6-compat
+
 WORKDIR /app
 
 # Install dependencies first for caching

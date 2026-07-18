@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Badge, Button } from "@/components/ui";
-import { Icon } from "@/components/icon";
+import { Badge, Button } from "@/components/shared/ui";
+import { Icon } from "@/components/shared/icon";
 import { analyticsSnapshots, chatbotIntents, hmsStages, integrationSignals, type AnalyticsPeriod } from "@/lib/analytics-data";
 
 const percent = (value: number, total: number) => total ? Math.round((value / total) * 100) : 0;

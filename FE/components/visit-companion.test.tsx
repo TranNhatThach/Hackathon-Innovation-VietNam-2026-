@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { VisitCompanionView } from "@/components/visit-companion";
+import { VisitCompanionView } from "@/components/patient/visit-companion";
 import { visitCompanion } from "@/lib/mock-data";
 
 describe("VisitCompanionView", () => {

@@ -141,34 +141,40 @@ export function useVLLMChat(options: UseVLLMChatOptions = {}): UseVLLMChatReturn
           const decoder = new TextDecoder();
           let assistantMessage = '';
 
+          let lastUpdate = 0;
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
-
-              const chunk = decoder.decode(value, { stream: true });
-              assistantMessage += chunk;
-
-              if (onStream) {
-                onStream(chunk);
+              
+              if (value) {
+                const chunk = decoder.decode(value, { stream: true });
+                assistantMessage += chunk;
+                if (onStream) {
+                  onStream(chunk);
+                }
               }
 
-              // Update messages with streaming content
-              setMessages((prev) => {
-                const updated = [...prev];
-                if (
-                  updated.length > 0 &&
-                  updated[updated.length - 1].role === 'assistant'
-                ) {
-                  updated[updated.length - 1].content = assistantMessage;
-                } else {
-                  updated.push({
-                    role: 'assistant',
-                    content: assistantMessage,
-                  });
-                }
-                return updated;
-              });
+              const now = Date.now();
+              if (done || now - lastUpdate > 60) {
+                lastUpdate = now;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  if (
+                    updated.length > 0 &&
+                    updated[updated.length - 1].role === 'assistant'
+                  ) {
+                    updated[updated.length - 1].content = assistantMessage;
+                  } else {
+                    updated.push({
+                      role: 'assistant',
+                      content: assistantMessage,
+                    });
+                  }
+                  return updated;
+                });
+              }
+
+              if (done) break;
             }
           } finally {
             reader.releaseLock();
@@ -266,7 +272,7 @@ export function useVLLMChat(options: UseVLLMChatOptions = {}): UseVLLMChatReturn
  *
  *   return (
  *     <div className="chat-container">
- *       {/* Display escalation warning if needed */}
+ *       {/* Display escalation warning if needed * /}
  *       {escalationLevel === 'red' && (
  *         <div className="alert alert-danger">
  *           ⚠️ {escalationReason}
@@ -279,10 +285,10 @@ export function useVLLMChat(options: UseVLLMChatOptions = {}): UseVLLMChatReturn
  *         </div>
  *       )}
  *
- *       {/* Display error if any */}
+ *       {/* Display error if any * /}
  *       {error && <div className="alert alert-danger">Error: {error}</div>}
  *
- *       {/* Display chat messages */}
+ *       {/* Display chat messages * /}
  *       <div className="messages">
  *         {messages.map((msg, idx) => (
  *           <div key={idx} className={`message message-${msg.role}`}>
@@ -291,10 +297,10 @@ export function useVLLMChat(options: UseVLLMChatOptions = {}): UseVLLMChatReturn
  *         ))}
  *       </div>
  *
- *       {/* Streaming indicator */}
+ *       {/* Streaming indicator * /}
  *       {isStreaming && <div className="typing-indicator">AI is typing...</div>}
  *
- *       {/* Input form */}
+ *       {/* Input form * /}
  *       <ChatInput
  *         onSend={handleSend}
  *         disabled={loading || isStreaming}

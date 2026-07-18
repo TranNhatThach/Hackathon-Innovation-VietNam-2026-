@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Icon } from "@/components/icon";
-import { Badge, Button, DemoStateControl, StateView } from "@/components/ui";
+import { Icon } from "@/components/shared/icon";
+import { Badge, Button, DemoStateControl, StateView } from "@/components/shared/ui";
 import { kanbanColumns, visits } from "@/lib/mock-data";
 import type { LoadState, Visit, VisitStage } from "@/types";
 
@@ -25,8 +25,9 @@ export function OperationsBoard() {
     return matchesSearch && matchesStage && needsAttention;
   }), [attentionOnly, query, stage]);
 
-  const overThirty = visits.filter((visit) => visit.waitMinutes > 30).length;
-  const bhytIssues = visits.filter((visit) => visit.paymentType === "BHYT" && visit.paymentStatus === "Chờ thanh toán").length;
+  const overThirty = useMemo(() => visits.filter((visit) => visit.waitMinutes > 30).length, []);
+  const bhytIssues = useMemo(() => visits.filter((visit) => visit.paymentType === "BHYT" && visit.paymentStatus === "Chờ thanh toán").length, []);
+  const attentionCount = useMemo(() => visits.filter((visit) => visit.alerts.length > 0 || visit.waitMinutes > 30).length, []);
 
   const focusBottleneck = () => {
     setStage("WAITING_DOCTOR");
@@ -48,13 +49,13 @@ export function OperationsBoard() {
       <div><span className="metric-icon metric-icon--red"><Icon name="alert"/></span><p><small>Yêu cầu P0 đang mở</small><strong>1</strong><em>Chưa có người nhận</em></p></div>
       <div><span className="metric-icon metric-icon--green"><Icon name="shield"/></span><p><small>Vướng BHYT / phí</small><strong>{bhytIssues}</strong><em>Đang chờ xử lý</em></p></div>
     </section>
-
+ 
     <section className="bottleneck-banner" aria-label="Cảnh báo điểm nghẽn"><Icon name="alert"/><div><strong>Điểm nghẽn: khu vực chờ bác sĩ</strong><p>3 lượt có nguy cơ vượt ngưỡng mô phỏng. Hãy xác minh vị trí người bệnh trước khi điều phối.</p></div><Button variant="secondary" onClick={focusBottleneck}>Xem lượt liên quan</Button><Link href="/staff/human-in-loop" className="button button--ghost">Mở hàng đợi hỗ trợ</Link></section>
 
     <section className="filter-toolbar" aria-label="Bộ lọc bảng vận hành">
       <label className="board-search"><Icon name="search" size={17}/><span className="sr-only">Tìm trong bảng vận hành</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tên rút gọn hoặc số thứ tự"/></label>
       <label><span className="sr-only">Giai đoạn</span><select value={stage} onChange={(event) => setStage(event.target.value as VisitStage | "ALL")}><option value="ALL">Tất cả giai đoạn</option>{kanbanColumns.map((column) => <option value={column.id} key={column.id}>{column.shortLabel}</option>)}</select></label>
-      <button className={attentionOnly ? "filter-button is-active" : "filter-button"} aria-pressed={attentionOnly} onClick={() => setAttentionOnly((value) => !value)}><Icon name="alert" size={15}/> Cần chú ý <b>{visits.filter((visit) => visit.alerts.length > 0 || visit.waitMinutes > 30).length}</b></button>
+      <button className={attentionOnly ? "filter-button is-active" : "filter-button"} aria-pressed={attentionOnly} onClick={() => setAttentionOnly((value) => !value)}><Icon name="alert" size={15}/> Cần chú ý <b>{attentionCount}</b></button>
       {(query || stage !== "ALL" || attentionOnly) && <button className="filter-button" onClick={() => { setQuery(""); setStage("ALL"); setAttentionOnly(false); }}>Xóa bộ lọc</button>}
       <span className="ops-result-count">{filtered.length} lượt</span>
       <div className="view-toggle" aria-label="Kiểu hiển thị"><button className={view === "board" ? "active" : ""} aria-label="Xem dạng bảng" aria-pressed={view === "board"} onClick={() => setView("board")}><Icon name="kanban"/></button><button className={view === "list" ? "active" : ""} aria-label="Xem dạng danh sách" aria-pressed={view === "list"} onClick={() => setView("list")}><Icon name="file"/></button></div>

@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Icon } from "@/components/icon";
-import { Button } from "@/components/ui";
-import ReactMarkdown from "react-markdown";
+import { Icon } from "@/components/shared/icon";
+import { Button } from "@/components/shared/ui";
+import dynamic from "next/dynamic";
 import remarkGfm from "remark-gfm";
+
+const ReactMarkdown = dynamic(() => import("react-markdown"), {
+  ssr: false,
+  loading: () => <p>Đang tải...</p>
+});
+import { getApiBaseUrl } from "@/lib/api";
 
 type Mode = "procedure" | "operations" | "patient";
 const prompts: Record<Mode, string[]> = {
@@ -54,10 +60,8 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
     const nextMessages: Message[] = [...newMessages, { role: "assistant", content: "" }];
     setMessages(nextMessages);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
     try {
-      const targetUrl = apiUrl.startsWith("http") ? apiUrl : `${window.location.protocol}//${window.location.hostname}:8000`;
+      const targetUrl = getApiBaseUrl();
       
       const response = await fetch(`${targetUrl}/api/chat`, {
         method: "POST",
@@ -68,7 +72,7 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
           message: text,
           history: messages.map(msg => ({ role: msg.role, content: msg.content })),
           stream: true,
-          agent_type: "employee"
+          agent_type: mode === "patient" ? "patient" : "employee"
         }),
       });
 
@@ -81,13 +85,16 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
       let done = false;
       let buffer = "";
 
+      let lastUpdate = 0;
       if (reader) {
         while (!done) {
           const { value: chunk, done: readerDone } = await reader.read();
           done = readerDone;
           buffer += decoder.decode(chunk, { stream: !done });
           
-          if (buffer) {
+          const now = Date.now();
+          if (done || now - lastUpdate > 60) {
+            lastUpdate = now;
             setMessages((prev) => {
               const updated = [...prev];
               if (updated[placeholderIdx]) {
@@ -125,7 +132,7 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
       
       {messages.map((msg, index) => (
         <div key={index} className={`chat-bubble chat-bubble--${msg.role}`}>
-          <div className="markdown-content text-xs leading-6 md:text-sm">
+          <div className="markdown-content">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
           </div>
         </div>

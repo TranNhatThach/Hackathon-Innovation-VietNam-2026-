@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { Button, StateView } from "@/components/ui";
+import { Button, StateView } from "@/components/shared/ui";
 
 describe("shared UI", () => {
   it("renders an accessible button and handles clicks", () => {

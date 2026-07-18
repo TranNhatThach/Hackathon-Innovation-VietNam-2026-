@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/shared/icon";
 import { procedureMeta, procedureSteps } from "@/lib/procedure-data";
 
 export function ProcedureCenter({ staff = false }: { staff?: boolean }) {

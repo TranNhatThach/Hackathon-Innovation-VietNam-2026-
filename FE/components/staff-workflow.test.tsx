@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { OperationsBoard } from "@/components/operations-board";
-import { HumanLoopDashboard } from "@/components/human-loop-dashboard";
+import { OperationsBoard } from "@/components/staff/operations-board";
+import { HumanLoopDashboard } from "@/components/staff/human-loop-dashboard";
 import { humanCases } from "@/lib/mock-data";
 
 describe("staff workflows", () => {

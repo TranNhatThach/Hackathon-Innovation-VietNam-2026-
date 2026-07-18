@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { AppointmentLookup, MedicationList } from "@/components/patient-tools";
+import { AppointmentLookup, MedicationList } from "@/components/patient/patient-tools";
 import { fictionalAppointment, fictionalMedications } from "@/lib/mock-data";
 
 describe("patient prototype components", () => {

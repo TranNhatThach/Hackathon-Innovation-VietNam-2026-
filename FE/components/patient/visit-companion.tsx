@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Icon } from "@/components/icon";
-import { DemoStateControl, StateView } from "@/components/ui";
+import { Icon } from "@/components/shared/icon";
+import { DemoStateControl, StateView } from "@/components/shared/ui";
 import type { LoadState, VisitCompanion as VisitData } from "@/types";
 
 export function VisitCompanionView({ visit }: { visit: VisitData }) {

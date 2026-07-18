@@ -1,4 +1,4 @@
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/shared/icon";
 import type { IconName, LoadState } from "@/types";
 
 export function Button({ children, variant = "primary", icon, className = "", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger"; icon?: IconName }) {

@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Icon } from "@/components/icon";
-import { PatientShell } from "@/components/patient-shell";
+import { Icon } from "@/components/shared/icon";
+import { PatientShell } from "@/components/patient/patient-shell";
 import { quickActions } from "@/lib/mock-data";
 
 export default function PatientHomePage() {

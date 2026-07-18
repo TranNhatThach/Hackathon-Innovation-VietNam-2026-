@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ChatDrawer } from "@/components/chat-drawer";
+import { ChatDrawer } from "@/components/staff/chat-drawer";
 
 describe("ChatDrawer", () => {
   it("thể hiện rõ ba chế độ và chuyển sang ngữ cảnh bệnh nhân", () => {

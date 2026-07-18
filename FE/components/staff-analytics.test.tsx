@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { StaffAnalyticsDashboard } from "@/components/staff-analytics";
+import { StaffAnalyticsDashboard } from "@/components/staff/staff-analytics";
 
 describe("StaffAnalyticsDashboard", () => {
   it("hiển thị chỉ số HMS, chatbot và công thức đo", () => {

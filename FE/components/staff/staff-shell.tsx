@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/shared/icon";
 import type { IconName } from "@/types";
-import { ChatDrawer } from "@/components/chat-drawer";
+import { ChatDrawer } from "./chat-drawer";
 
 const nav: { href: string; label: string; icon: IconName; badge?: string }[] = [
   { href: "/staff/operations", label: "Vận hành", icon: "kanban" },

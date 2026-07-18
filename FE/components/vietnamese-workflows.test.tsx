@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { AppointmentLookup } from "@/components/patient-tools";
-import { PatientFaq } from "@/components/patient-faq";
-import { ProcedureCenter } from "@/components/procedure-center";
+import { AppointmentLookup } from "@/components/patient/patient-tools";
+import { PatientFaq } from "@/components/patient/patient-faq";
+import { ProcedureCenter } from "@/components/procedure/procedure-center";
 import { fictionalAppointment } from "@/lib/mock-data";
 
 describe("Các luồng tiếng Việt hoàn chỉnh", () => {

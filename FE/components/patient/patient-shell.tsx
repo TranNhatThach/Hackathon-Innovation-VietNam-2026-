@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/shared/icon";
 
 export function Brand({ inverse = false }: { inverse?: boolean }) {
   return <Link href="/" className={`brand ${inverse ? "brand--inverse" : ""}`} aria-label="Bệnh viện Tim Hà Nội - Trang chủ"><span className="brand__mark"><Icon name="heart" size={25} /></span><span><strong>BỆNH VIỆN TIM HÀ NỘI</strong><small>HANOI HEART HOSPITAL</small></span></Link>;

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Badge, Button } from "@/components/ui";
-import { Icon } from "@/components/icon";
+import { Badge, Button } from "@/components/shared/ui";
+import { Icon } from "@/components/shared/icon";
 
 const tabs = ["Tổng quan", "Lịch khám", "Thuốc", "Tài liệu", "Đồng thuận"] as const;
 type Tab = (typeof tabs)[number];

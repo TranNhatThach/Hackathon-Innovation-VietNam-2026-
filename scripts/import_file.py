@@ -9,7 +9,7 @@ sys.path.append(ROOT_DIR)
 
 load_dotenv()
 
-from agent import index_chunks
+from agent import index_chunks, init_qdrant_collection
 
 def parse_file(file_path: str):
     """
@@ -88,6 +88,8 @@ def main():
         return
 
     print(f"✅ Trích xuất thành công {len(chunks)} đoạn văn bản.")
+    print("🔧 Đang kiểm tra và khởi tạo Qdrant collection (nếu chưa có)...")
+    init_qdrant_collection()
     print("🚀 Đang tiến hành tạo Vector Embedding qua FPT và nạp vào Qdrant...")
     
     if index_chunks(chunks):

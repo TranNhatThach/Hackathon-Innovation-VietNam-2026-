@@ -26,35 +26,58 @@ else:
         https=use_https
     )
 
+def _collection_exists() -> bool:
+    """Check if the Qdrant collection already exists."""
+    try:
+        existing = qdrant_client.get_collections()
+        return any(c.name == COLLECTION_NAME for c in existing.collections)
+    except Exception:
+        return False
+
+
 def init_qdrant_collection():
     """
-    Creates the collection in Qdrant with the correct dimension and full-text index.
+    Creates or recreates the collection in Qdrant with the correct dimension
+    and full-text index. Compatible with both old and new qdrant-client versions.
     """
     dim = get_embedding_dimension()
-    logger.info(f"Recreating Qdrant collection '{COLLECTION_NAME}' with size={dim}")
+    logger.info(f"Initializing Qdrant collection '{COLLECTION_NAME}' with size={dim}")
     try:
-        qdrant_client.recreate_collection(
+        # Delete the collection if it exists (compatible replacement for recreate_collection)
+        if _collection_exists():
+            qdrant_client.delete_collection(collection_name=COLLECTION_NAME)
+            logger.info(f"Deleted existing collection '{COLLECTION_NAME}'")
+
+        # Create the collection fresh
+        qdrant_client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=dim, distance=Distance.COSINE),
         )
+        logger.info(f"Created collection '{COLLECTION_NAME}'")
+
         # Create text payload index for full-text search
-        from qdrant_client.http import models as qdrant_models
-        qdrant_client.create_payload_index(
-            collection_name=COLLECTION_NAME,
-            field_name="text",
-            field_schema=qdrant_models.TextIndexParams(
-                type="text",
-                tokenizer=qdrant_models.TokenizerType.WORD,
-                lowercase=True,
-                min_token_len=2,
-                max_token_len=15
+        try:
+            from qdrant_client.http import models as qdrant_models
+            qdrant_client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name="text",
+                field_schema=qdrant_models.TextIndexParams(
+                    type="text",
+                    tokenizer=qdrant_models.TokenizerType.WORD,
+                    lowercase=True,
+                    min_token_len=2,
+                    max_token_len=15
+                )
             )
-        )
-        logger.info(f"Created full-text payload index on field 'text'")
+            logger.info("Created full-text payload index on field 'text'")
+        except Exception as e:
+            logger.warning(f"Could not create text index (non-critical): {e}")
+
         return True
     except Exception as e:
-        logger.error(f"Failed to recreate Qdrant collection: {e}")
+        logger.error(f"Failed to initialize Qdrant collection: {e}")
         return False
+
 
 def index_chunks(chunks: List[Dict[str, Any]]):
     """
@@ -65,21 +88,39 @@ def index_chunks(chunks: List[Dict[str, Any]]):
     - title: str
     - source: str
     """
+    if not chunks:
+        logger.warning("index_chunks called with empty list")
+        return False
+
+    # Ensure collection exists before indexing
+    if not _collection_exists():
+        logger.info("Collection does not exist, initializing...")
+        if not init_qdrant_collection():
+            return False
+
     points = []
     for chunk in chunks:
-        vector = get_embedding(chunk["text"])
-        points.append(
-            PointStruct(
-                id=chunk["id"],
-                vector=vector,
-                payload={
-                    "text": chunk["text"],
-                    "title": chunk["title"],
-                    "source": chunk["source"]
-                }
+        try:
+            vector = get_embedding(chunk["text"])
+            points.append(
+                PointStruct(
+                    id=chunk["id"],
+                    vector=vector,
+                    payload={
+                        "text": chunk["text"],
+                        "title": chunk["title"],
+                        "source": chunk["source"]
+                    }
+                )
             )
-        )
-    
+        except Exception as e:
+            logger.error(f"Failed to embed chunk {chunk.get('id')}: {e}")
+            continue
+
+    if not points:
+        logger.error("No points to upsert (all embeddings failed)")
+        return False
+
     try:
         qdrant_client.upsert(
             collection_name=COLLECTION_NAME,
@@ -91,12 +132,14 @@ def index_chunks(chunks: List[Dict[str, Any]]):
         logger.error(f"Failed to upsert chunks into Qdrant: {e}")
         return False
 
+
 import json
+
 
 def rerank_chunks(query: str, chunks: List[Dict[str, Any]], top_n: int = 3) -> List[Dict[str, Any]]:
     """
-    Xếp hạng lại các đoạn văn bản truy xuất bằng mô hình LLM (Prompt-based Reranker).
-    Đây là giai đoạn Reranking/Ranking RAG theo chuẩn Google ADK 2.0.
+    Re-ranks retrieved chunks using an LLM-based ranker (FPT AI Factory).
+    Falls back to original order if reranking fails.
     """
     if not chunks:
         return []
@@ -126,10 +169,10 @@ def rerank_chunks(query: str, chunks: List[Dict[str, Any]], top_n: int = 3) -> L
         response = client.chat_completion(messages, temperature=0.1)
         response_text = response.get("content", "").strip()
 
-        # Tìm kiếm khối mảng JSON
+        # Find the JSON array in response
         start_idx = response_text.find("[")
         end_idx = response_text.find("]") + 1
-        if start_idx != -1 and end_idx != -1:
+        if start_idx != -1 and end_idx > start_idx:
             rankings = json.loads(response_text[start_idx:end_idx])
             reranked = []
             seen = set()
@@ -137,7 +180,7 @@ def rerank_chunks(query: str, chunks: List[Dict[str, Any]], top_n: int = 3) -> L
                 if isinstance(index, int) and 0 <= index < len(chunks) and index not in seen:
                     reranked.append(chunks[index])
                     seen.add(index)
-            # Bổ sung các chunk bị thiếu nếu LLM bỏ quên
+            # Add any chunks the LLM missed
             for idx, chunk in enumerate(chunks):
                 if idx not in seen:
                     reranked.append(chunk)
@@ -147,36 +190,62 @@ def rerank_chunks(query: str, chunks: List[Dict[str, Any]], top_n: int = 3) -> L
 
     return chunks[:top_n]
 
+
 def retrieve_context(query: str, limit: int = 3, threshold: float = 0.30) -> List[Dict[str, Any]]:
     """
-    Truy xuất các đoạn văn bản bằng phương thức Hybrid Search (Dense Vector + Sparse Keyword),
-    sau đó thực hiện gom nhóm xếp hạng nghịch đảo RRF và cuối cùng chạy LLM Reranking.
+    Retrieves document chunks using Hybrid Search (Dense Vector + Sparse Keyword),
+    applies Reciprocal Rank Fusion (RRF), then performs LLM-based Reranking.
+    Compatible with qdrant-client >=1.7.x and >=1.9.x.
     """
-    candidate_limit = max(limit * 2, 8)
+    if not _collection_exists():
+        logger.warning(f"Collection '{COLLECTION_NAME}' does not exist. Run seed.py first.")
+        return []
+
+    candidate_limit = max(limit * 3, 10)
     query_vector = get_embedding(query)
-    
+
     try:
         from qdrant_client.http import models as qdrant_models
-        
-        # 1. Nhánh 1: Vector Search (Dense)
-        vector_results = qdrant_client.query_points(
-            collection_name=COLLECTION_NAME,
-            query=query_vector,
-            limit=candidate_limit
-        )
-        
+
+        # 1. Dense Vector Search
         dense_hits = []
-        for res in vector_results.points:
-            if res.score >= threshold:
-                dense_hits.append({
-                    "id": res.id,
-                    "text": res.payload.get("text", ""),
-                    "title": res.payload.get("title", ""),
-                    "source": res.payload.get("source", ""),
-                    "score": res.score
-                })
-                
-        # 2. Nhánh 2: Keyword Search (Sparse) dùng MatchText trên payload field 'text'
+        try:
+            # Try newer API first (qdrant-client >= 1.9.0)
+            vector_results = qdrant_client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=query_vector,
+                limit=candidate_limit
+            )
+            for res in vector_results.points:
+                if res.score >= threshold:
+                    dense_hits.append({
+                        "id": res.id,
+                        "text": res.payload.get("text", ""),
+                        "title": res.payload.get("title", ""),
+                        "source": res.payload.get("source", ""),
+                        "score": res.score
+                    })
+        except AttributeError:
+            # Fallback for qdrant-client < 1.9.0 (uses search)
+            try:
+                vector_results = qdrant_client.search(
+                    collection_name=COLLECTION_NAME,
+                    query_vector=query_vector,
+                    limit=candidate_limit,
+                    score_threshold=threshold
+                )
+                for res in vector_results:
+                    dense_hits.append({
+                        "id": res.id,
+                        "text": res.payload.get("text", ""),
+                        "title": res.payload.get("title", ""),
+                        "source": res.payload.get("source", ""),
+                        "score": res.score
+                    })
+            except Exception as e:
+                logger.error(f"Dense vector search failed: {e}")
+
+        # 2. Keyword Search (Sparse) via payload MatchText filter
         keyword_hits = []
         try:
             scroll_res, _ = qdrant_client.scroll(
@@ -197,38 +266,41 @@ def retrieve_context(query: str, limit: int = 3, threshold: float = 0.30) -> Lis
                     "text": point.payload.get("text", ""),
                     "title": point.payload.get("title", ""),
                     "source": point.payload.get("source", ""),
-                    "score": 0.5  # Điểm số mặc định khi khớp từ khóa
+                    "score": 0.5  # Fixed score for keyword matches
                 })
         except Exception as e:
             logger.debug(f"Keyword search failed or no text index: {e}")
 
-        # 3. Trộn kết quả bằng thuật toán RRF (Reciprocal Rank Fusion)
-        rrf_scores = {}
-        doc_map = {}
-        
+        # 3. Reciprocal Rank Fusion (RRF) to merge both result sets
+        rrf_scores: Dict[int, float] = {}
+        doc_map: Dict[int, Dict] = {}
+
         for rank, doc in enumerate(dense_hits):
             doc_id = doc["id"]
             doc_map[doc_id] = doc
             rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (60.0 + rank))
-            
+
         for rank, doc in enumerate(keyword_hits):
             doc_id = doc["id"]
             if doc_id not in doc_map:
                 doc_map[doc_id] = doc
             rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (60.0 + rank))
-            
-        # Sắp xếp các tài liệu theo điểm RRF giảm dần
+
+        # Sort by RRF score descending
         sorted_doc_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
         retrieved = [doc_map[doc_id] for doc_id in sorted_doc_ids]
-        
-        # Cắt lấy số lượng ứng viên tối đa cho LLM Reranker
+
+        # Limit candidates for reranker to avoid excessive LLM calls
         retrieved_candidates = retrieved[:candidate_limit]
 
-        # 4. Thực hiện bước Reranking cuối cùng sử dụng LLM
+        if not retrieved_candidates:
+            logger.info(f"No candidates found for query: '{query}'")
+            return []
+
+        # 4. LLM-based Reranking
         reranked_results = rerank_chunks(query, retrieved_candidates, top_n=limit)
         return reranked_results
-        
+
     except Exception as e:
         logger.error(f"Failed to retrieve context from Qdrant: {e}")
         return []
-

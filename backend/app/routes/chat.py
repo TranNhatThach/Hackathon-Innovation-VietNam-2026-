@@ -49,31 +49,40 @@ def chat_endpoint(
     session_id = request.session_id or str(uuid.uuid4())
     user_id = request.user_id or x_forwarded_for or "anonymous"
     
-    # 2. Get or create conversation
-    conversation = ConversationService.get_conversation_by_session(db, session_id)
-    if not conversation:
-        conversation = ConversationService.create_conversation(
-            db, user_id, session_id
-        )
-    
+    # 2. Get or create conversation (wrapped – DB failure must NOT cause a 500)
+    try:
+        conversation = ConversationService.get_conversation_by_session(db, session_id)
+        if not conversation:
+            conversation = ConversationService.create_conversation(
+                db, user_id, session_id
+            )
+    except Exception as db_err:
+        logger.error(f"DB error creating/fetching conversation: {db_err}")
+        conversation = None  # Continue without DB persistence
+
     # 3. Load history from DB if not provided by client
     formatted_history = []
     if request.history:
         formatted_history = [{"role": msg.role, "content": msg.content} for msg in request.history]
-    else:
+    elif conversation:
         # Load from database if available
         db_history = ConversationService.get_conversation_history(db, session_id, limit=20)
         if db_history:
             formatted_history = db_history
-    
-    # 4. Save user message to DB
-    ConversationService.add_message(db, session_id, "user", request.message)
-    
+
+    # 4. Save user message to DB (best-effort, never raises)
+    try:
+        ConversationService.add_message(db, session_id, "user", request.message)
+    except Exception:
+        pass
+
     # 5. Check emergency guardrail
     emergency_warning = check_emergency(request.message)
     if emergency_warning:
-        # Save emergency response to DB
-        ConversationService.add_message(db, session_id, "assistant", emergency_warning)
+        try:
+            ConversationService.add_message(db, session_id, "assistant", emergency_warning)
+        except Exception:
+            pass
         if request.stream:
             def event_generator():
                 yield emergency_warning
@@ -92,28 +101,46 @@ def chat_endpoint(
                 for chunk in agent.execute_stream(request.message, formatted_history):
                     full_response += chunk
                     yield chunk
-                # Save full response to DB after streaming completes
-                ConversationService.add_message(db, session_id, "assistant", full_response)
+                # Save full response to DB after streaming completes (best-effort)
+                try:
+                    ConversationService.add_message(db, session_id, "assistant", full_response)
+                except Exception:
+                    pass
             except Exception as e:
-                error_msg = f"Error: {str(e)}"
+                logger.error(f"Streaming error: {e}")
+                error_msg = "Xin lỗi, đã xảy ra lỗi kết nối. Vui lòng thử lại hoặc gọi 024 3942 2430."
                 yield error_msg
-                ConversationService.add_message(db, session_id, "assistant", error_msg)
-        
+                try:
+                    ConversationService.add_message(db, session_id, "assistant", error_msg)
+                except Exception:
+                    pass
+
         return StreamingResponse(event_generator(), media_type="text/plain")
 
+    # Non-streaming path
     try:
         response_text = agent.execute(request.message, formatted_history)
-        # Save response to DB
-        ConversationService.add_message(db, session_id, "assistant", response_text)
+        try:
+            ConversationService.add_message(db, session_id, "assistant", response_text)
+        except Exception:
+            pass
         return {
             "response": response_text,
             "session_id": session_id,
             "from_db": False
         }
     except Exception as e:
-        error_msg = str(e)
-        ConversationService.add_message(db, session_id, "assistant", error_msg)
-        raise HTTPException(status_code=500, detail=error_msg)
+        logger.error(f"Agent execution error: {e}")
+        fallback = "Xin lỗi, đã xảy ra lỗi kết nối với mô hình AI. Vui lòng thử lại sau hoặc gọi Hotline: 024 3942 2430."
+        try:
+            ConversationService.add_message(db, session_id, "assistant", fallback)
+        except Exception:
+            pass
+        return {
+            "response": fallback,
+            "session_id": session_id,
+            "from_db": False
+        }
 
 
 @router.get("/history/{session_id}")

@@ -80,11 +80,12 @@ def parse_knowledge_base(file_path: str):
 def seed_databases():
     print("🌱 Initializing seeding process...")
     
-    # 1. Initialize Qdrant collection first
+    # 1. Initialize Qdrant collection first (always create/recreate it)
     print("Connecting and initializing Qdrant collection...")
     if not init_qdrant_collection():
-        print("❌ Failed to initialize Qdrant collection.")
+        print("❌ Failed to initialize Qdrant collection. Check Qdrant service is running.")
         return
+    print("✅ Qdrant collection ready.")
         
     # 2. Find and parse all files in data/raw
     raw_dir = os.path.join(ROOT_DIR, "data", "raw")
@@ -93,59 +94,92 @@ def seed_databases():
         return
 
     all_chunks = []
+    parsed_files = 0
     
-    for filename in os.listdir(raw_dir):
+    for filename in sorted(os.listdir(raw_dir)):
         if filename.startswith(".") or not filename.endswith((".txt", ".md")):
             continue
             
         file_path = os.path.join(raw_dir, filename)
-        print(f"Parsing raw file: {filename}...")
+        print(f"\nParsing: {filename}...")
         
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception as e:
+            print(f"  ⚠️  Could not read {filename}: {e}")
+            continue
             
         if filename == "knowledge_base.md":
             chunks = parse_knowledge_base(file_path)
         else:
-            # Parse custom text/markdown files using optimized chunking
+            # Parse text/markdown files using optimized chunking
             chunks = []
-            base_id = hash(filename) % 10000000
+            base_id = abs(hash(filename)) % 10000000
             chunk_id = base_id
-            paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
-            for i, para in enumerate(paragraphs):
-                first_line = para.split("\n")[0]
-                title = first_line[:40] + "..." if len(first_line) > 40 else first_line
-                sub_chunks = chunk_text(para, max_chars=1000, overlap=200)
-                for j, sub_text in enumerate(sub_chunks):
-                    text = f"Tài liệu: {filename}\nPhần: {title} (Phân đoạn {j+1})\n\n{sub_text}"
-                    chunks.append({
-                        "id": chunk_id,
-                        "text": text,
-                        "title": f"{filename} - {title} ({j+1})" if len(sub_chunks) > 1 else f"{filename} - {title}",
-                        "source": filename
-                    })
-                    chunk_id += 1
+            
+            if filename.endswith(".md"):
+                # Split by markdown '## ' headers
+                sections = content.split("\n## ")
+                for section in sections:
+                    section = section.strip()
+                    if not section:
+                        continue
+                    lines = section.split("\n")
+                    title = lines[0].strip().replace("## ", "").replace("# ", "")
+                    sub_chunks = chunk_text(section, max_chars=1000, overlap=200)
+                    for j, sub_text in enumerate(sub_chunks):
+                        text = f"Tài liệu: {filename}\nPhần: {title} (Đoạn {j+1})\n\n{sub_text}"
+                        chunks.append({
+                            "id": chunk_id,
+                            "text": text,
+                            "title": f"{title} - Đoạn {j+1}" if len(sub_chunks) > 1 else title,
+                            "source": filename
+                        })
+                        chunk_id += 1
+            else:
+                paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+                for i, para in enumerate(paragraphs):
+                    first_line = para.split("\n")[0]
+                    title = first_line[:40] + "..." if len(first_line) > 40 else first_line
+                    sub_chunks = chunk_text(para, max_chars=1000, overlap=200)
+                    for j, sub_text in enumerate(sub_chunks):
+                        text = f"Tài liệu: {filename}\nPhần: {title} (Phân đoạn {j+1})\n\n{sub_text}"
+                        chunks.append({
+                            "id": chunk_id,
+                            "text": text,
+                            "title": f"{filename} - {title} ({j+1})" if len(sub_chunks) > 1 else f"{filename} - {title}",
+                            "source": filename
+                        })
+                        chunk_id += 1
                     
-        all_chunks.extend(chunks)
+        if chunks:
+            print(f"  → Extracted {len(chunks)} chunks")
+            all_chunks.extend(chunks)
+            parsed_files += 1
+        else:
+            print(f"  ⚠️  No chunks extracted (file may be empty or have no ## headers)")
         
     if not all_chunks:
-        print("⚠️ No chunks parsed from data/raw. Seeding aborted.")
+        print("\n⚠️  No chunks found in data/raw/. Qdrant collection is initialized but empty.")
+        print("   Place .md or .txt files in data/raw/ then re-run this script.")
+        print("   Example: docker compose exec backend python scripts/import_file.py data/raw/myfile.md")
         return
         
-    print(f"Parsed {len(all_chunks)} chunks successfully in total.")
-    print("Indexing all chunks into Qdrant...")
+    print(f"\n📊 Total: {len(all_chunks)} chunks from {parsed_files} file(s).")
+    print("Indexing all chunks into Qdrant (this may take a few minutes)...")
     if index_chunks(all_chunks):
-        print("✅ Qdrant database seeded successfully!")
+        print(f"✅ Successfully indexed {len(all_chunks)} chunks into Qdrant!")
     else:
         print("❌ Failed to index chunks into Qdrant.")
 
-    # 3. Seed Relational Database (Postgres)
+    # 3. Note about Postgres (tables are auto-created by FastAPI on startup)
     db_url = os.getenv("DATABASE_URL", "")
     if db_url:
-        print("Connecting to Postgres database...")
-        print("PostgreSQL seeding helper loaded.")
+        print("\n✅ PostgreSQL connection available. Tables are created automatically on FastAPI startup.")
+        print("   To manually run migrations: docker compose exec backend python scripts/migrate_db.py")
 
-    print("🎉 Seeding routine complete!")
+    print("\n🎉 Seeding routine complete!")
 
 if __name__ == "__main__":
     seed_databases()

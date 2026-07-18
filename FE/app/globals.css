@@ -143,3 +143,48 @@ body{font-family:"Segoe UI",Arial,sans-serif;font-size:16px;line-height:1.65}
 .home-support__message{padding:10px 14px;font-size:14px;line-height:1.5;box-shadow:0 5px 16px rgba(13,74,108,.07)}.home-support__message--user,.home-support__message--user *{color:#fff!important}.home-support__message--assistant,.home-support__message--assistant *{color:#123d58!important}.home-support__message strong{font-weight:800}.home-support__message h1,.home-support__message h2,.home-support__message h3,.home-support__message h4{font-weight:700;margin:10px 0 6px;line-height:1.35;color:inherit!important}.home-support__message h1,.home-support__message h2{font-size:16px}.home-support__message h3,.home-support__message h4{font-size:14px}.home-support__message ul,.home-support__message ol{padding-left:20px}.home-support__message li{margin:5px 0}.home-support__conversation .typing{font-size:12px;color:#315d75;background:rgba(255,255,255,.7);width:max-content;padding:9px 12px;border-radius:10px}
 .patient-hero .hero-grid{width:min(100% - 40px,1180px);margin-inline:auto}.patient-hero .hero-grid .home-support{width:min(100%,900px)!important;margin-inline:auto!important}.patient-hero .home-support__content{width:100%!important;max-width:900px;margin-inline:auto!important}.home-support__conversation{width:100%;max-height:480px;padding-inline:0}.home-support__message{max-width:88%;padding:10px 14px;font-size:14px;line-height:1.5;text-align:left}.home-support__message p{font-size:14px;line-height:1.5;text-align:left}.home-support__message li{font-size:13px;line-height:1.45}.home-support form input{font-size:14px}.home-support__suggestions button{font-size:12px;padding:8px 12px}.home-support__below>small{font-size:11px}.home-support__conversation .typing{font-size:13px}
 .home-support__conversation{box-sizing:border-box;padding:14px 4px 18px;background:transparent;border:0;box-shadow:none;overflow-y:auto;overflow-x:hidden;max-height:480px}.home-support__message{border-radius:18px}.home-support__message--user{border-bottom-right-radius:6px}.home-support__message--assistant{border-bottom-left-radius:6px}.home-support__conversation::-webkit-scrollbar{width:6px}.home-support__conversation::-webkit-scrollbar-track{background:transparent}.home-support__conversation::-webkit-scrollbar-thumb{border-radius:10px;background:#c3d7e2}.home-support__conversation+form{margin-top:16px;border-radius:18px}@media(max-width:720px){.patient-hero .hero-grid{width:min(100% - 28px,1180px)}.home-support__conversation{max-height:380px!important}.home-support__message,.home-support__message p{font-size:13px}.home-support__message{max-width:94%;padding:8px 12px}.home-support__message h1,.home-support__message h2{font-size:15px}.home-support__message h3,.home-support__message h4{font-size:13px}}
+
+/* ── STT/TTS: Speech Integration Styles ────────────────────────────────── */
+
+/* Mic button base */
+.mic-button{display:flex;align-items:center;gap:5px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--navy);transition:all .2s ease;min-height:42px;font-size:9px;white-space:nowrap}
+.mic-button:hover{border-color:var(--blue);color:var(--blue);background:#edf5fa}
+
+/* Mic button: listening state */
+.mic-button.is-listening{border-color:#e53e3e;background:#fff5f5;color:#e53e3e;animation:pulse-mic 1.5s ease-in-out infinite}
+@keyframes pulse-mic{0%,100%{box-shadow:0 0 0 0 rgba(229,62,62,.3)}50%{box-shadow:0 0 0 8px rgba(229,62,62,0)}}
+
+/* Speech status label (shown inside mic button when listening) */
+.speech-status{font-size:9px;font-weight:600;letter-spacing:.02em}
+
+/* TTS toggle button */
+.tts-toggle{border:0;background:none;cursor:pointer;color:rgba(255,255,255,.6);padding:4px;border-radius:6px;transition:all .2s}
+.tts-toggle:hover{color:#fff;background:rgba(255,255,255,.1)}
+.tts-toggle.is-active{color:#6dd9a8}
+.tts-toggle.is-speaking{animation:pulse-speak 1s ease-in-out infinite}
+@keyframes pulse-speak{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* Header actions container (patient FAQ) */
+.header-actions{display:flex;align-items:center;gap:6px}
+
+/* Adjust faq-input grid to accommodate mic button */
+.faq-input{grid-template-columns:1fr auto 44px}
+
+/* Adjust chat-input flex to accommodate mic button */
+.chat-input .mic-button{width:42px;padding:0;justify-content:center}
+.chat-input .mic-button .speech-status{display:none}
+
+/* STT Error Alert */
+.stt-error{grid-column:1/-1;margin-bottom:8px;padding:8px 12px;background:#fff5f5;border:1px solid #fc8181;border-radius:8px;color:#c53030;font-size:12px;display:flex;align-items:center;gap:8px}
+
+/* Mic button: processing state */
+.mic-button.is-processing{border-color:var(--blue);background:#fff;color:var(--blue);cursor:not-allowed}
+.mic-button.is-processing svg{animation:spin-icon 1.5s linear infinite}
+@keyframes spin-icon{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+/* Responsive: hide speech-status text on narrow screens */
+@media(max-width:720px){
+  .mic-button .speech-status{display:none}
+  .mic-button{padding:6px 8px}
+}
+

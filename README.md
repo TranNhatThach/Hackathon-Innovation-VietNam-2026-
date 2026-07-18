@@ -128,28 +128,34 @@ The platform consists of a responsive Next.js frontend, a FastAPI backend orches
 
 ## ⚙️ Core Technical Features
 
-### 1. Safety-First Guardrails (Emergency Mode)
+### 1. Safety-First Guardrails (Hybrid Emergency Mode)
 For cardiovascular symptoms (e.g., chest pain, acute dyspnea, loss of consciousness, cold sweating), the backend instantly halts the LLM generation loop:
-* **Immediate Redirection**: Serves a structured alert directing patients to call **115** or the hospital's Emergency Hotline (**0243.8248362**).
-* **Prevention of Delay**: Prevents AI hallucination or conversation lag in critical life-threatening moments.
+*   **Fast Keyword Match (Regex)**: Instantly matches common cardiovascular emergency terms in the user query.
+*   **Semantic Similarity Guardrail**: Computes the cosine similarity between the user's query embedding (via FPT `Vietnamese_Embedding`) and cached emergency templates. If similarity exceeds `0.52`, it immediately serves the emergency redirection warning.
+*   **Emergency Redirection**: Serves a structured alert directing patients to call **115** or the hospital's Emergency Hotline (**0243.8248362**).
 
-### 2. High-Precision Hybrid RAG Pipeline
-* **Dense Vector Search**: Qdrant query matches on FPT AI Factory `Vietnamese_Embedding` vectors.
-* **Sparse Keyword Search**: Regex matching filters run parallel over metadata payloads to capture abbreviations (e.g., *BHYT*) and official document codes (e.g., *QT.25.01*).
-* **Reciprocal Rank Fusion (RRF)**: Merges the scores of vector and keyword results:
-  $$RRF\_Score(d) = \sum_{m \in M} \frac{1}{60 + r_m(d)}$$
-* **LLM Reranker**: The final candidate chunks are sent to FPT's model in a structured ranking prompt to return the top 3 most relevant segments.
-* **Dynamic Mode Selection**:
-  * **Strict RAG Mode**: If matching documents are found, responses are strictly bounded by document contexts and require exact source citation.
-  * **Flexible Mode**: If no matching documents are found, responses are composed of general hospital knowledge, accompanied by an advice warning to contact hospital support directly.
+### 2. High-Precision Hybrid RAG Pipeline & BGE Reranker
+*   **Dense Vector Search**: Qdrant query matches on FPT AI Factory `Vietnamese_Embedding` vectors.
+*   **Sparse Keyword Search**: Regex matching filters run parallel over metadata payloads to capture abbreviations (e.g., *BHYT*) and official codes.
+*   **FPT BGE Reranker Integration**: Candidate chunks are sent to the dedicated **BGE-Reranker-v2-m3** API hosted on FPT AI Factory to rank documents with high multilingual Vietnamese accuracy and minimal latency.
+*   **Safe Fallback**: If the reranker API is unavailable, the pipeline automatically falls back to prompt-based LLM ranking.
 
-### 3. Google ADK-Style Tools (Function Calling)
-* `get_doctor_schedule`: Resolves physician slots by checking names and dates.
-* `book_appointment`: Persists scheduled appointment logs back to database fields.
+### 3. PostgreSQL Database Integration for Agent Tools
+*   The ADK Agent tools (`book_appointment`, `get_doctor_schedule`, `search_doctors`) are fully integrated with PostgreSQL.
+*   `book_appointment` automatically resolves the patient by phone, inserts `Appointment`, registers a live `Visit` (stage="SCHEDULED"), and records `VisitJourneyEvent` in the database. All AI-scheduled bookings instantly populate the staff Kanban dashboard.
 
-### 4. Conversation History Persistence
-Saves all inputs, generated outputs, tool calls, and model metadata inside relational tables (`conversations`, `messages`).
-Allows complete multi-turn conversation memory, chat restoration, and user session clean-up.
+### 4. Human-in-the-Loop & Mute Control
+*   **Escalation Tool**: Bypasses AI if the query is too complex or if the user requests human assistance, saving an escalation ticket into `human_cases`.
+*   **AI Agent Mute Control**: The backend `/api/chat` router checks if the patient has an active `HumanCase` in the database. If so, it silences the AI Agent and routes the chat history to the staff queue for manual takeover.
+
+### 5. Background Reminder Worker
+*   An asynchronous background worker loop (`worker.py`) runs natively alongside FastAPI.
+*   Scans database records every 60 seconds for today's confirmed appointments and pending medication reminders (`MedicationReminder`), triggering mock SMS/Zalo notifications to patient numbers.
+
+### 6. Transparent Column-Level Encryption (Compliance & Security)
+*   Implements transparent, symmetric data encryption using a base64-encoded XOR cipher.
+*   Automatically encrypts sensitive patient columns (`display_name`, `phone`, `address`) and medication instructions (`instruction`) at rest in PostgreSQL, while decrypting them on-the-fly when loaded into memory in Python.
+*   Compatible with pre-existing plain text seed data (graceful fallback).
 
 ---
 
@@ -235,6 +241,20 @@ make evaluate
 | `make clean` | Drops all active containers, removes database volumes, and deletes Pycache files |
 | `make seed` | Creates the Qdrant schema and embeds files located in `data/raw` |
 | `make evaluate` | Runs the backend unit/integration evaluation test suites |
+
+---
+
+## 🎙️ Speech Integration Roadmap (TTS & STT)
+
+The platform is architected to easily integrate voice features. Here is how you can merge speech capabilities (Text-to-Speech and Speech-to-Text):
+
+### 1. Speech-to-Text (STT) - User Voice Input
+*   **Frontend Integration**: Install an audio recording widget (e.g. using Web Audio API or standard library like `react-media-recorder`) in the chat bar of the Patient Homepage ([HomeChat](file:///d:/Code/Hackathon/project/FE/components/patient/home-chat.tsx)) or AI Assistant page.
+*   **Backend Integration**: Send the audio payload (.wav or .mp3) to a FastAPI route `/api/speech/stt`. Use FPT AI Factory's Speech Recognition API to convert audio to text, then pass the transcribed text directly to the existing `/api/chat` router.
+
+### 2. Text-to-Speech (TTS) - Agent Voice Response
+*   **Backend Integration**: Implement a route `/api/speech/tts` that accepts text and converts it to audio using FPT AI Factory's Text-to-Speech engine (e.g., standard voice models like BanMai, CaoBong).
+*   **Frontend Integration**: The chat assistant can automatically play the audio stream using HTML5 `<audio>` elements when the AI Agent returns responses, providing a complete voice-interactive hospital front-desk experience.
 
 ---
 

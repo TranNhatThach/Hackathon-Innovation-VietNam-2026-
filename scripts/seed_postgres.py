@@ -1,105 +1,447 @@
 #!/usr/bin/env python
-"""Create the current application schema and seed deterministic demo data."""
-import json
+import os
 import sys
-from datetime import date, datetime
-from pathlib import Path
+import logging
+from datetime import datetime, date, timedelta
+import uuid
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Set up project root in path
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT_DIR)
 
-from backend.app.database import Base, SessionLocal, engine
+from backend.app.database import engine, SessionLocal
 from backend.app.models import (
-    Appointment,
-    HumanCase,
-    Medication,
-    MedicationReminder,
-    Patient,
-    Procedure,
-    ProcedureStep,
-    Visit,
-    VisitJourneyEvent,
+    Base, Doctor, Patient, Appointment, Visit, VisitJourneyEvent,
+    Medication, MedicationReminder, HumanCase
 )
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("seed_postgres")
 
-def get_or_create(db, model, defaults=None, **lookup):
-    instance = db.query(model).filter_by(**lookup).one_or_none()
-    if instance:
-        return instance, False
-    instance = model(**lookup, **(defaults or {}))
-    db.add(instance)
-    db.flush()
-    return instance, True
+# Define mock doctors matching agent/tools/tools.py DOCTOR_DATABASE
+MOCK_DOCTORS = [
+    {
+        "doctor_code": "BS-001",
+        "display_name": "GS.TS.BS. Nguyễn Văn Hùng",
+        "department": "Tim mạch Can thiệp",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-002",
+        "display_name": "PGS.TS.BS. Trần Thị Lan",
+        "department": "Tim mạch Nhi",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-003",
+        "display_name": "TS.BS. Lê Minh Tuấn",
+        "department": "Rối loạn nhịp tim",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-004",
+        "display_name": "BS.CKII. Phạm Thị Hoa",
+        "department": "Suy tim và Bệnh cơ tim",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-005",
+        "display_name": "BS.CKI. Hoàng Văn Nam",
+        "department": "Tim mạch Nội khoa tổng quát",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-006",
+        "display_name": "BS.CKI. Nguyễn Thị Bích Ngọc",
+        "department": "Bệnh van tim",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-007",
+        "display_name": "PGS.TS.BS. Đặng Quốc Tuấn",
+        "department": "Tim mạch Can thiệp (Chụp và can thiệp mạch vành)",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-008",
+        "display_name": "TS.BS. Nguyễn Thị Mai",
+        "department": "Tim mạch Can thiệp (Thông tim và động mạch ngoại biên)",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-009",
+        "display_name": "BS.CKII. Trần Công Bình",
+        "department": "Tim mạch Can thiệp",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-010",
+        "display_name": "GS.TS.BS. Vũ Ngọc Tú",
+        "department": "Phẫu thuật Tim mạch",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    },
+    {
+        "doctor_code": "BS-011",
+        "display_name": "BS.CKII. Lê Thị Thu",
+        "department": "Tim mạch Nhi (Tim bẩm sinh)",
+        "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1",
+        "is_active": True
+    }
+]
 
+# Define mock patients (is_demo=False to display on staff dashboard)
+MOCK_PATIENTS = [
+    {
+        "patient_code": "BN-DEMO-001",
+        "display_name": "Nguyễn Văn An",
+        "date_of_birth": date(1985, 5, 20),
+        "phone": "0912345678",
+        "address": "12 Cát Linh, Đống Đa, Hà Nội",
+        "preferred_channel": "web",
+        "is_demo": False
+    },
+    {
+        "patient_code": "BN-DEMO-002",
+        "display_name": "Trần Thị Bình",
+        "date_of_birth": date(1962, 10, 15),
+        "phone": "0987654321",
+        "address": "45 Lê Duẩn, Hoàn Kiếm, Hà Nội",
+        "preferred_channel": "web",
+        "is_demo": False
+    },
+    {
+        "patient_code": "BN-DEMO-003",
+        "display_name": "Phạm Minh Hùng",
+        "date_of_birth": date(1990, 2, 8),
+        "phone": "0901234567",
+        "address": "88 Giải Phóng, Hai Bà Trưng, Hà Nội",
+        "preferred_channel": "web",
+        "is_demo": False
+    }
+]
 
 def seed():
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    created = {}
     try:
-        patient, created["patients"] = get_or_create(
-            db, Patient, patient_code="BN-DEMO-0042",
-            defaults={"display_name": "Nguyễn Văn An", "date_of_birth": date(1968, 4, 12), "phone": "0987 000 042", "address": "Phường Cửa Nam, Hà Nội", "preferred_channel": "web", "is_demo": True},
+        # Create tables if not exists
+        logger.info("Verifying database tables...")
+        Base.metadata.create_all(bind=engine)
+
+        # 1. Clean old seed data to prevent Unique Constraint violations
+        logger.info("Cleaning old mock data...")
+        
+        # Clean visits and journey events
+        visit_codes = ["LUOT-DEMO-001", "LUOT-DEMO-002", "LUOT-DEMO-003"]
+        db.query(VisitJourneyEvent).filter(
+            VisitJourneyEvent.visit_id.in_(
+                db.query(Visit.id).filter(Visit.visit_code.in_(visit_codes))
+            )
+        ).delete(synchronize_session=False)
+        db.query(Visit).filter(Visit.visit_code.in_(visit_codes)).delete(synchronize_session=False)
+
+        # Clean appointments
+        appt_codes = ["HEN-DEMO-001", "HEN-DEMO-002", "HEN-DEMO-003"]
+        db.query(Appointment).filter(Appointment.appointment_code.in_(appt_codes)).delete(synchronize_session=False)
+
+        # Clean medications and reminders
+        med_codes = ["DT-DEMO-001", "DT-DEMO-002"]
+        db.query(MedicationReminder).filter(
+            MedicationReminder.medication_id.in_(
+                db.query(Medication.id).filter(Medication.medication_code.in_(med_codes))
+            )
+        ).delete(synchronize_session=False)
+        db.query(Medication).filter(Medication.medication_code.in_(med_codes)).delete(synchronize_session=False)
+
+        # Clean human cases
+        db.query(HumanCase).filter(HumanCase.case_code.like("CASE-DEMO-%")).delete(synchronize_session=False)
+
+        # Clean patients
+        patient_codes = [p["patient_code"] for p in MOCK_PATIENTS]
+        db.query(Patient).filter(Patient.patient_code.in_(patient_codes)).delete(synchronize_session=False)
+
+        # Clean doctors
+        doc_codes = [d["doctor_code"] for d in MOCK_DOCTORS]
+        db.query(Doctor).filter(Doctor.doctor_code.in_(doc_codes)).delete(synchronize_session=False)
+        
+        db.commit()
+        logger.info("Clean-up completed.")
+
+        # 2. Insert Doctors
+        logger.info("Seeding Doctors...")
+        inserted_doctors = []
+        for doc_data in MOCK_DOCTORS:
+            doctor = Doctor(**doc_data)
+            db.add(doctor)
+            inserted_doctors.append(doctor)
+        db.flush() # Get IDs
+
+        # 3. Insert Patients
+        logger.info("Seeding Patients...")
+        patient_map = {}
+        for p_data in MOCK_PATIENTS:
+            patient = Patient(**p_data)
+            db.add(patient)
+            db.flush()
+            patient_map[patient.patient_code] = patient.id
+        
+        # 4. Insert Appointments
+        logger.info("Seeding Appointments...")
+        now = datetime.utcnow()
+        
+        # Appt 1: Nguyễn Văn An - Scheduled for Today, Confirmed
+        appt1 = Appointment(
+            appointment_code="HEN-DEMO-001",
+            patient_id=patient_map["BN-DEMO-001"],
+            scheduled_at=now + timedelta(hours=2),
+            facility="Bệnh viện Tim Hà Nội - Cơ sở 1",
+            department="Tim mạch Can thiệp",
+            doctor="GS.TS.BS. Nguyễn Văn Hùng",
+            visit_type="Khám lại",
+            payment_type="BHYT",
+            status="Đã xác nhận",
         )
-        appointment, created["appointments"] = get_or_create(
-            db, Appointment, appointment_code="HEN-260717-042",
-            defaults={"patient_id": patient.id, "scheduled_at": datetime(2026, 7, 17, 9, 30), "facility": "Bệnh viện Tim Hà Nội - Cơ sở 1", "department": "Phòng khám Tim mạch tổng quát", "doctor": "BS. Nguyễn Minh Anh", "visit_type": "Khám lần đầu", "payment_type": "BHYT", "status": "Đã xác nhận", "required_documents": json.dumps(["Căn cước công dân", "Thẻ BHYT", "Giấy chuyển tuyến (nếu có)"], ensure_ascii=False)},
+        db.add(appt1)
+
+        # Appt 2: Trần Thị Bình - Scheduled for Today, Completed
+        appt2 = Appointment(
+            appointment_code="HEN-DEMO-002",
+            patient_id=patient_map["BN-DEMO-002"],
+            scheduled_at=now - timedelta(hours=3),
+            facility="Bệnh viện Tim Hà Nội - Cơ sở 1",
+            department="Tim mạch Nhi",
+            doctor="PGS.TS.BS. Trần Thị Lan",
+            visit_type="Khám mới",
+            payment_type="Dịch vụ",
+            status="Đã khám",
         )
-        visit, created["visits"] = get_or_create(
-            db, Visit, visit_code="VISIT-001",
-            defaults={"patient_id": patient.id, "appointment_id": appointment.id, "queue_number": "A024", "stage": "PAYMENT", "stage_label": "Chờ thanh toán", "entered_stage_at": datetime(2026, 7, 17, 10, 5), "room": "Quầy thu ngân số 03", "payment_type": "BHYT", "payment_status": "Chờ thanh toán", "priority": "Bình thường", "alerts": json.dumps([], ensure_ascii=False), "next_action": "Thanh toán và đến khu đo sinh hiệu", "status": "ACTIVE"},
+        db.add(appt2)
+
+        # Appt 3: Phạm Minh Hùng - Scheduled for Today, Pending
+        appt3 = Appointment(
+            appointment_code="HEN-DEMO-003",
+            patient_id=patient_map["BN-DEMO-003"],
+            scheduled_at=now + timedelta(hours=4),
+            facility="Bệnh viện Tim Hà Nội - Cơ sở 1",
+            department="Rối loạn nhịp tim",
+            doctor="TS.BS. Lê Minh Tuấn",
+            visit_type="Khám mới",
+            payment_type="Dịch vụ",
+            status="Chờ xác nhận",
         )
+        db.add(appt3)
+        db.flush()
 
-        events = [
-            ("ARRIVED", "Đã đến viện", "done", datetime(2026, 7, 17, 9, 20), "Quầy tiếp đón"),
-            ("REGISTRATION", "Đăng ký", "done", datetime(2026, 7, 17, 9, 30), "Quầy đăng ký"),
-            ("PAYMENT", "Thanh toán", "current", datetime(2026, 7, 17, 10, 5), "Quầy thu ngân số 03"),
-        ]
-        event_count = 0
-        for stage, label, status, occurred_at, location in events:
-            _, was_created = get_or_create(db, VisitJourneyEvent, visit_id=visit.id, stage=stage, occurred_at=occurred_at, defaults={"stage_label": label, "status": status, "location": location})
-            event_count += int(was_created)
-        created["visit_journey_events"] = event_count
+        # 5. Insert Visits and Visit Journey Events
+        logger.info("Seeding Visits & Events...")
+        
+        # Visit 1 (Nguyễn Văn An): Active Visit - Currently Waiting for Doctor
+        visit1 = Visit(
+            visit_code="LUOT-DEMO-001",
+            patient_id=patient_map["BN-DEMO-001"],
+            appointment_id=appt1.id,
+            queue_number="A024",
+            stage="WAITING_DOCTOR",
+            stage_label="Chờ bác sĩ",
+            entered_stage_at=now - timedelta(minutes=15),
+            room="Phòng 201",
+            doctor="GS.TS.BS. Nguyễn Văn Hùng",
+            payment_type="BHYT",
+            payment_status="Đã thanh toán",
+            priority="Bình thường",
+            alerts="Bệnh nhân tăng huyết áp mãn tính",
+            next_action="Vui lòng đợi gọi tên vào Phòng 201, Tầng 2 Khu A",
+            status="ACTIVE"
+        )
+        db.add(visit1)
+        db.flush()
 
-        medication_rows = [
-            ("MED-001", "Cardioval 5 mg", "1 viên", "Sau ăn sáng", "08:00", "Sắp đến giờ"),
-            ("MED-002", "Aspirin 81 mg", "1 viên", "Sau ăn tối", "20:00", "Chưa phản hồi"),
-        ]
-        medication_count = reminder_count = 0
-        for code, name, dosage, schedule, reminder_time, reminder_status in medication_rows:
-            medication, was_created = get_or_create(db, Medication, medication_code=code, defaults={"patient_id": patient.id, "name": name, "dosage": dosage, "schedule": schedule, "instruction": "Dùng theo đơn đã được bác sĩ duyệt; không tự ý thay đổi liều.", "valid_from": date(2026, 7, 17), "valid_to": date(2026, 7, 31), "approved_by": "BS. Nguyễn Minh Anh", "is_active": True})
-            medication_count += int(was_created)
-            hour, minute = map(int, reminder_time.split(":"))
-            _, was_created = get_or_create(db, MedicationReminder, medication_id=medication.id, scheduled_at=datetime(2026, 7, 17, hour, minute), defaults={"status": reminder_status})
-            reminder_count += int(was_created)
-        created["medications"] = medication_count
-        created["medication_reminders"] = reminder_count
+        # Events for Visit 1
+        db.add(VisitJourneyEvent(
+            visit_id=visit1.id,
+            stage="SCHEDULED",
+            stage_label="Đã xác nhận lịch",
+            status="completed",
+            occurred_at=now - timedelta(hours=2),
+            location="Hệ thống trực tuyến",
+            note="Lịch hẹn đặt thành công trực tuyến."
+        ))
+        db.add(VisitJourneyEvent(
+            visit_id=visit1.id,
+            stage="REGISTRATION",
+            stage_label="Đăng ký",
+            status="completed",
+            occurred_at=now - timedelta(minutes=45),
+            location="Quầy đón tiếp số 2",
+            note="Đã kiểm tra thẻ BHYT và CCCD."
+        ))
+        db.add(VisitJourneyEvent(
+            visit_id=visit1.id,
+            stage="PAYMENT",
+            stage_label="Thanh toán",
+            status="completed",
+            occurred_at=now - timedelta(minutes=30),
+            location="Quầy thu tiền số 3",
+            note="Đã nộp tạm ứng khám BHYT."
+        ))
+        db.add(VisitJourneyEvent(
+            visit_id=visit1.id,
+            stage="WAITING_DOCTOR",
+            stage_label="Chờ bác sĩ",
+            status="current",
+            occurred_at=now - timedelta(minutes=15),
+            location="Phòng 201, Tầng 2",
+            note="Hệ thống xếp hàng tự động phân vào Phòng 201."
+        ))
 
-        case_rows = [
-            ("CASE-2406", "Hỗ trợ tại viện", "Người bệnh chờ lâu và cần xác minh vị trí.", "P0", datetime(2026, 7, 17, 10, 30), None, "Mở"),
-            ("CASE-2407", "Hỗ trợ thanh toán", "Cần giải thích bước thanh toán BHYT.", "P2", datetime(2026, 7, 17, 11, 20), "Lan Anh", "Đang xử lý"),
-        ]
-        case_count = 0
-        for code, case_type, trigger, priority, due_at, owner, status in case_rows:
-            _, was_created = get_or_create(db, HumanCase, case_code=code, defaults={"patient_id": patient.id, "visit_id": visit.id, "case_type": case_type, "trigger": trigger, "priority": priority, "sla_due_at": due_at, "owner": owner, "status": status})
-            case_count += int(was_created)
-        created["human_cases"] = case_count
+        # Visit 2 (Trần Thị Bình): Completed Visit
+        visit2 = Visit(
+            visit_code="LUOT-DEMO-002",
+            patient_id=patient_map["BN-DEMO-002"],
+            appointment_id=appt2.id,
+            queue_number="B005",
+            stage="COMPLETED",
+            stage_label="Hoàn tất",
+            entered_stage_at=now - timedelta(hours=1),
+            room="Phòng 220",
+            doctor="PGS.TS.BS. Trần Thị Lan",
+            payment_type="Dịch vụ",
+            payment_status="Đã thanh toán",
+            priority="Ưu tiên",
+            alerts=None,
+            next_action="Lượt khám hoàn thành, ra về và uống thuốc theo đơn",
+            status="COMPLETED"
+        )
+        db.add(visit2)
+        db.flush()
 
-        procedure, created["procedures"] = get_or_create(db, Procedure, code="QT.25.01", defaults={"title": "Quy trình khám và điều trị ngoại trú tại Khu Khám bệnh Tự nguyện 1", "issue": "Lần ban hành 01", "effective_date": date(2026, 7, 1), "source_url": "/documents/QT.25.01.pdf", "is_active": True})
-        step_titles = ["Đăng ký khám và kiểm tra giấy tờ", "Lấy số tiếp nhận", "Đăng ký khám", "BHYT và thu phí", "Đo sinh hiệu", "Khám bác sĩ", "Cận lâm sàng", "Nhận kết quả", "Nhận thuốc và hoàn tất"]
-        step_count = 0
-        for order, title in enumerate(step_titles, 1):
-            _, was_created = get_or_create(db, ProcedureStep, procedure_id=procedure.id, step_order=order, defaults={"slug": f"buoc-{order}", "title": title, "patient_instruction": f"Thực hiện bước: {title} theo hướng dẫn của nhân viên.", "responsible_role": "Nhân viên phụ trách công đoạn", "staff_actions": json.dumps(["Xác minh thông tin", "Ghi nhận trạng thái", "Chuyển bước khi đủ điều kiện"], ensure_ascii=False), "source_pages": f"Trang {order}"})
-            step_count += int(was_created)
-        created["procedure_steps"] = step_count
+        db.add(VisitJourneyEvent(
+            visit_id=visit2.id,
+            stage="COMPLETED",
+            stage_label="Hoàn tất",
+            status="completed",
+            occurred_at=now - timedelta(hours=1),
+            location="Phòng khám 220",
+            note="Khám xong, đã nhận đơn thuốc điện tử."
+        ))
+
+        # Visit 3 (Phạm Minh Hùng): Active Visit - Check-in stage (waiting confirmation)
+        visit3 = Visit(
+            visit_code="LUOT-DEMO-003",
+            patient_id=patient_map["BN-DEMO-003"],
+            appointment_id=appt3.id,
+            queue_number="H003",
+            stage="SCHEDULED",
+            stage_label="Chờ xác nhận lịch",
+            entered_stage_at=now - timedelta(minutes=5),
+            room=None,
+            doctor=None,
+            payment_type="Dịch vụ",
+            payment_status="Chờ thanh toán",
+            priority="Bình thường",
+            alerts=None,
+            next_action="Chờ nhân viên xác nhận và phân công bác sĩ",
+            status="ACTIVE"
+        )
+        db.add(visit3)
+        db.flush()
+
+        db.add(VisitJourneyEvent(
+            visit_id=visit3.id,
+            stage="SCHEDULED",
+            stage_label="Chờ xác nhận lịch",
+            status="current",
+            occurred_at=now - timedelta(minutes=5),
+            note="Tạo từ lịch hẹn chờ duyệt"
+        ))
+
+        # 6. Insert Medications & Reminders
+        logger.info("Seeding Medications & Reminders...")
+        
+        # Medication for Patient 2 (Trần Thị Bình)
+        med1 = Medication(
+            medication_code="DT-DEMO-001",
+            patient_id=patient_map["BN-DEMO-002"],
+            name="Concor 5mg (Bisoprolol fumarate)",
+            dosage="1 viên / ngày",
+            schedule="Uống sáng sau ăn 8:00",
+            instruction="Hạn chế vận động mạnh sau uống thuốc, theo dõi nhịp tim.",
+            valid_from=date.today(),
+            valid_to=date.today() + timedelta(days=30),
+            approved_by="PGS.TS.BS. Trần Thị Lan",
+            is_active=True
+        )
+        db.add(med1)
+        
+        med2 = Medication(
+            medication_code="DT-DEMO-002",
+            patient_id=patient_map["BN-DEMO-002"],
+            name="Amlodipin 5mg",
+            dosage="1 viên / ngày",
+            schedule="Uống tối 20:00",
+            instruction="Tránh dùng chung với nước bưởi.",
+            valid_from=date.today(),
+            valid_to=date.today() + timedelta(days=30),
+            approved_by="PGS.TS.BS. Trần Thị Lan",
+            is_active=True
+        )
+        db.add(med2)
+        db.flush()
+
+        # Reminders for Med 1
+        db.add(MedicationReminder(
+            medication_id=med1.id,
+            scheduled_at=datetime.combine(date.today(), datetime.min.time()) + timedelta(hours=8), # Today 08:00 AM
+            status="Chưa phản hồi"
+        ))
+        db.add(MedicationReminder(
+            medication_id=med2.id,
+            scheduled_at=datetime.combine(date.today(), datetime.min.time()) + timedelta(hours=20), # Today 08:00 PM
+            status="Chưa phản hồi"
+        ))
+
+        # 7. Insert a demo Human Case for testing staff escalation
+        logger.info("Seeding Human Case Escalation...")
+        db.add(HumanCase(
+            case_code="CASE-DEMO-001",
+            patient_id=patient_map["BN-DEMO-001"],
+            visit_id=visit1.id,
+            case_type="Hỗ trợ y tế",
+            trigger="Bệnh nhân hỏi về việc gộp BHYT trái tuyến nhưng hệ thống RAG không có thông tin chi tiết.",
+            priority="HIGH",
+            sla_due_at=now + timedelta(minutes=30),
+            owner=None,
+            status="OPEN"
+        ))
 
         db.commit()
-        print(json.dumps({"status": "ok", "created": created}, ensure_ascii=False))
-    except Exception:
+        logger.info("🎉 PostgreSQL Database Seeding Completed Successfully!")
+        
+        # Verify and log summary
+        logger.info(f"Summary of Seeded Data:")
+        logger.info(f"  - Doctors: {db.query(Doctor).count()} total")
+        logger.info(f"  - Patients: {db.query(Patient).count()} total")
+        logger.info(f"  - Appointments: {db.query(Appointment).count()} total")
+        logger.info(f"  - Active/Completed Visits: {db.query(Visit).count()} total")
+        logger.info(f"  - Medications: {db.query(Medication).count()} total")
+        logger.info(f"  - Active Human Cases: {db.query(HumanCase).filter(HumanCase.status=='OPEN').count()} open")
+
+    except Exception as e:
         db.rollback()
-        raise
+        logger.error(f"❌ Seeding failed: {str(e)}")
+        raise e
     finally:
         db.close()
-
 
 if __name__ == "__main__":
     seed()

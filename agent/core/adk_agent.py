@@ -245,7 +245,7 @@ def create_default_agent(system_prompt_file: str = "system.md") -> ADKAgent:
     agent = ADKAgent(name="GeneralAgent", system_prompt_file=system_prompt_file)
 
     # Import tool functions from agent.tools.tools
-    from agent.tools.tools import get_doctor_schedule, book_appointment, search_doctors
+    from agent.tools.tools import get_doctor_schedule, book_appointment, search_doctors, escalate_to_human
 
     # Tool 1: Search doctors by specialty or name
     search_tool = Tool(
@@ -333,5 +333,34 @@ def create_default_agent(system_prompt_file: str = "system.md") -> ADKAgent:
         }
     )
     agent.register_tool(booking_tool)
+
+    # Tool 4: Escalate to human operator
+    escalate_tool = Tool(
+        name="escalate_to_human",
+        func=escalate_to_human,
+        description=(
+            "Chuyển giao cuộc hội thoại của bệnh nhân cho nhân viên hỗ trợ y tế thực tế khi bệnh nhân yêu cầu gặp người thật, "
+            "hỏi thông tin nằm ngoài cơ sở dữ liệu RAG, tỏ ra giận dữ, hoặc cần giải quyết khiếu nại."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "patient_phone": {
+                    "type": "string",
+                    "description": "Số điện thoại liên hệ của bệnh nhân (10-11 chữ số) để nhân viên liên hệ lại hoặc tra cứu"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Lý do chuyển tiếp hỗ trợ (ví dụ: 'Hỏi về bảo hiểm xã hội trái tuyến', 'Yêu cầu gặp người thật')"
+                },
+                "urgent": {
+                    "type": "boolean",
+                    "description": "Trạng thái khẩn cấp (chuyển sang True nếu tình huống cần giải quyết gấp)"
+                }
+            },
+            "required": ["patient_phone", "reason"]
+        }
+    )
+    agent.register_tool(escalate_tool)
 
     return agent

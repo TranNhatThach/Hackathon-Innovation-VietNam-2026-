@@ -11,6 +11,7 @@ const nav: { href: string; label: string; icon: IconName; badge?: string }[] = [
   { href: "/staff/operations", label: "Vận hành", icon: "kanban" },
   { href: "/staff/human-in-loop", label: "Can thiệp con người", icon: "help", badge: "4" },
   { href: "/staff/patients", label: "Người bệnh", icon: "users" },
+  { href: "/staff/doctors", label: "Bác sĩ", icon: "user" },
   { href: "/staff/procedures", label: "Quy trình", icon: "book" },
   { href: "/staff/analytics", label: "Phân tích", icon: "chart" },
 ];
@@ -29,7 +30,10 @@ export function StaffShell({ children }: { children: React.ReactNode }) {
         <p className="nav-section">KHÔNG GIAN LÀM VIỆC</p>
         {nav.map((item) => <Link key={item.label} href={item.href} onClick={() => setNavOpen(false)} className={pathname === item.href ? "active" : ""}><Icon name={item.icon} size={19} /><span>{item.label}</span>{item.badge && <b>{item.badge}</b>}</Link>)}
       </nav>
-      <div className="sidebar-bottom"><div className="mock-label"><Icon name="shield" size={17} /><span><strong>Môi trường demo</strong><small>Chỉ dùng dữ liệu mô phỏng</small></span></div></div>
+      <div className="sidebar-bottom">
+        <Link href="/" target="_blank" rel="noopener noreferrer" onClick={() => setNavOpen(false)}><Icon name="users" size={18}/><span>Mở cổng bệnh nhân</span><Icon name="arrow" size={15}/></Link>
+        <div className="mock-label"><Icon name="check" size={17}/><span><strong>Hệ thống trực tuyến</strong><small>Dữ liệu đồng bộ PostgreSQL</small></span></div>
+      </div>
     </aside>
     {navOpen && <button className="sidebar-overlay" aria-label="Đóng trình đơn" onClick={() => setNavOpen(false)} />}
     <div className="staff-content">

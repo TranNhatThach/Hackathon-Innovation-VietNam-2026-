@@ -10,6 +10,7 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     volumes:
       - ./FE:/app
+      - /app/node_modules
     environment:
       - VITE_API_URL=http://localhost:${BACKEND_PORT:-8000}
       - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}

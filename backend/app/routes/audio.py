@@ -5,12 +5,8 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, WebSocket, WebSo
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import httpx
-from deepgram import (
-    AsyncDeepgramClient,
-    LiveTranscriptionEvents,
-    LiveOptions,
-    PrerecordedOptions,
-)
+from deepgram import AsyncDeepgramClient
+from deepgram.core.events import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -44,49 +40,53 @@ async def websocket_stt_stream(websocket: WebSocket):
         # Initialize Deepgram async client
         deepgram_client = AsyncDeepgramClient(DEEPGRAM_API_KEY)
         
-        # Configure Live options. 
+        # Configure and establish connection using async context manager
         # Using model nova-3, language 'vi' for Vietnamese, with smart formatting enabled.
-        options = LiveOptions(
+        async with deepgram_client.listen.v1.connect(
             model="nova-3",
             language="vi",
             smart_format=True
-        )
-        
-        # Establish connection with Deepgram's live transcription endpoint
-        # Use dynamic version check to ensure compatibility with all deepgram-sdk versions (v3+)
-        listen_attr = deepgram_client.listen.asynclive
-        if hasattr(listen_attr, "v"):
-            dg_socket = await listen_attr.v("1").connect(options)
-        else:
-            dg_socket = await listen_attr.v1.connect(options)
-        
-        # Define transcript event handler
-        async def on_message(self, result, **kwargs):
+        ) as dg_socket:
+            
+            # Define transcript event handler
+            async def on_message(self, result, **kwargs):
+                try:
+                    if hasattr(result, "channel") and result.channel and result.channel.alternatives:
+                        transcript = result.channel.alternatives[0].transcript
+                        if transcript and len(transcript.strip()) > 0:
+                            logger.info(f"Deepgram live transcript: {transcript}")
+                            await websocket.send_text(transcript)
+                except Exception as e:
+                    logger.error(f"Error forwarding transcript to client: {str(e)}")
+
+            async def on_error(self, error, **kwargs):
+                logger.error(f"Deepgram WebSocket error event: {str(error)}")
+
+            # Register event handlers
+            dg_socket.on(EventType.MESSAGE, on_message)
+            dg_socket.on(EventType.ERROR, on_error)
+
+            # Start listening task in the background
+            import asyncio
+            listen_task = asyncio.create_task(dg_socket.start_listening())
+
             try:
-                transcript = result.channel.alternatives[0].transcript
-                if transcript and len(transcript.strip()) > 0:
-                    logger.info(f"Deepgram live transcript: {transcript}")
-                    await websocket.send_text(transcript)
-            except Exception as e:
-                logger.error(f"Error forwarding transcript to client: {str(e)}")
-
-        async def on_error(self, error, **kwargs):
-            logger.error(f"Deepgram WebSocket error event: {str(error)}")
-
-        # Register event handlers
-        dg_socket.on(LiveTranscriptionEvents.Transcript, on_message)
-        dg_socket.on(LiveTranscriptionEvents.Error, on_error)
-
-        try:
-            # Relay binary audio chunks from Next.js client to Deepgram
-            while True:
-                data = await websocket.receive_bytes()
-                if data:
-                    await dg_socket.send(data)
-        except WebSocketDisconnect:
-            logger.info("Next.js client disconnected from STT WebSocket stream")
-        finally:
-            await dg_socket.finish()
+                # Relay binary audio chunks from Next.js client to Deepgram
+                while True:
+                    data = await websocket.receive_bytes()
+                    if data:
+                        await dg_socket.send_media(data)
+            except WebSocketDisconnect:
+                logger.info("Next.js client disconnected from STT WebSocket stream")
+            finally:
+                # Tell Deepgram to finalize/close the stream
+                await dg_socket.send_close_stream()
+                # Cancel the background listening task
+                listen_task.cancel()
+                try:
+                    await listen_task
+                except asyncio.CancelledError:
+                    pass
             
     except Exception as e:
         logger.error(f"STT Deepgram WebSocket proxy error: {str(e)}")
@@ -110,18 +110,13 @@ async def speech_to_text(file: UploadFile = File(...)):
         content = await file.read()
         deepgram_client = AsyncDeepgramClient(DEEPGRAM_API_KEY)
         
-        options = PrerecordedOptions(
+        # Call transcribe_file directly using keyword arguments
+        response = await deepgram_client.listen.v1.media.transcribe_file(
+            request=content,
             model="nova-3",
             language="vi",
             smart_format=True
         )
-        
-        # Dynamic version check for compatibility (v3+)
-        rest_attr = deepgram_client.listen.rest
-        if hasattr(rest_attr, "v"):
-            response = await rest_attr.v("1").transcribe_file({"buffer": content}, options)
-        else:
-            response = await rest_attr.v1.transcribe_file({"buffer": content}, options)
             
         transcribed_text = response.results.channels[0].alternatives[0].transcript
         logger.info(f"Deepgram file transcription result: {transcribed_text}")

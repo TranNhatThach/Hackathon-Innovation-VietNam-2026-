@@ -1,0 +1,25 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { Icon } from "@/components/shared/icon";
+import { DemoStateControl, StateView } from "@/components/shared/ui";
+import type { LoadState, VisitCompanion as VisitData } from "@/types";
+
+export function VisitCompanionView({ visit }: { visit: VisitData }) {
+  const [state, setState] = useState<LoadState>("ready");
+  const [confirmed, setConfirmed] = useState(false);
+  const [showDirections, setShowDirections] = useState(false);
+  const [support, setSupport] = useState(false);
+  return <>
+    <div className="visit-topline"><div className="container"><span><Icon name="shield" size={16}/> Phiên truy cập an toàn · Dữ liệu mô phỏng</span><DemoStateControl state={state} setState={setState}/></div></div>
+    <section className="visit-heading"><div className="container"><div><span className="breadcrumb">Trang chủ <Icon name="chevron" size={13}/> Lượt khám hôm nay</span><h1>Xin chào, {visit.patientDisplayName}</h1><p>Chúng tôi sẽ đồng hành cùng bạn trong suốt lượt khám hôm nay.</p></div><div className="updated-pill"><Icon name="refresh" size={17}/><span><small>Cập nhật gần nhất</small><strong>{visit.lastUpdated}</strong></span></div></div></section>
+    <div className="container visit-content">{state !== "ready" ? <StateView state={state} emptyText="Chưa có lượt khám đang diễn ra." onRetry={() => setState("ready")}/> : <>
+      <section className="queue-notice"><span className="queue-notice__icon"><Icon name="bell"/></span><div><span className="eyebrow">SẮP ĐẾN LƯỢT CỦA BẠN</span><h2>Vui lòng di chuyển đến khu vực tiếp theo</h2><p>Còn khoảng <strong>{visit.peopleAhead} lượt</strong> trước bạn. Thời gian chờ có thể thay đổi theo tình hình thực tế.</p></div><button className={confirmed ? "button button--success" : "button button--primary"} onClick={() => setConfirmed(!confirmed)}><Icon name={confirmed ? "check" : "route"}/>{confirmed ? "Đã xác nhận đang đến" : "Tôi đang đến quầy"}</button></section>
+      <div className="visit-layout"><div className="visit-primary">
+        <section className="current-stage card"><div className="card-heading"><span><Icon name="route"/> BƯỚC HIỆN TẠI</span><span className="live-dot"><i/> Đang hoạt động</span></div><div className="stage-main"><div className="queue-big"><small>Số thứ tự</small><strong>{visit.queueNumber}</strong></div><div className="stage-info"><h2>{visit.currentStage}</h2><p><Icon name="map"/> <strong>{visit.location}</strong></p><p>{visit.floor}</p></div></div><div className="people-ahead"><div className="people-icons"><i/><i/><i/></div><span><strong>Còn khoảng {visit.peopleAhead} lượt trước bạn</strong><small>Không phải thời gian chờ cam kết</small></span></div><div className="card-actions"><button className="button button--primary" aria-expanded={showDirections} onClick={() => setShowDirections(!showDirections)}><Icon name="map"/> {showDirections ? "Ẩn chỉ đường" : "Xem chỉ đường"}</button><button className="button button--secondary" onClick={() => setSupport(true)}><Icon name="help"/> Tôi cần hỗ trợ</button></div>{showDirections && <div className="direction-panel" role="status"><Icon name="route"/><div><strong>Chỉ đường mô phỏng đến {visit.location}</strong><ol><li>Kiểm tra tên khu vực trên phiếu hướng dẫn.</li><li>Theo biển chỉ dẫn tại tầng hiện tại và màn hình gọi số.</li><li>Nếu chưa rõ, hỏi nhân viên hướng dẫn tại quầy gần nhất.</li></ol><small>Sơ đồ chưa kết nối vị trí thực tế. Vui lòng ưu tiên biển chỉ dẫn trong bệnh viện.</small></div></div>}{support && <div className="inline-feedback" role="status"><Icon name="check" size={15}/> Đã tạo yêu cầu hỗ trợ mô phỏng HT-A024. Vui lòng báo trực tiếp với nhân viên nếu cần hỗ trợ ngay.</div>}</section>
+        <section className="prep-card card"><div className="card-heading"><span><Icon name="file"/> CHUẨN BỊ CHO BƯỚC NÀY</span></div><ul>{visit.instructions.map((item) => <li key={item}><span><Icon name="check" size={15}/></span>{item}</li>)}</ul><div className="info-note"><Icon name="help"/><span><strong>Lưu ý</strong><p>Vui lòng chỉ xuất trình giấy tờ cho nhân viên tại quầy. Không gửi thông tin cá nhân qua trợ lý trực tuyến.</p><Link href="/procedures#bhyt-thu-phi">Xem bước tương ứng trong QT.25.01</Link></span></div></section>
+      </div><aside className="journey-card card"><div className="card-heading"><span><Icon name="route"/> HÀNH TRÌNH KHÁM</span><small>3/9 bước</small></div><ol>{visit.journey.map((step, index) => <li className={`journey-step journey-step--${step.status}`} key={step.id}><span className="journey-marker">{step.status === "done" ? <Icon name="check" size={14}/> : index + 1}</span><div><strong>{step.label}</strong>{step.status === "current" && <small>Đang thực hiện</small>}</div></li>)}</ol><p className="journey-footnote"><Icon name="refresh" size={15}/> Hành trình tự động cập nhật theo dữ liệu mô phỏng.</p><Link className="journey-source" href="/procedures">Đối chiếu quy trình QT.25.01 <Icon name="arrow" size={14}/></Link></aside></div>
+    </>}</div>
+  </>;
+}

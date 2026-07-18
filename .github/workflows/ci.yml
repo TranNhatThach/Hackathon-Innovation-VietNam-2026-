@@ -1,8 +1,11 @@
 name: CI Pipeline
 
+env:
+  DATABASE_URL: postgresql://postgres:password123@localhost:5432/hackathon_db_test
+
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, newfe ]
   pull_request:
     branches: [ main, develop ]
 
@@ -56,14 +59,14 @@ jobs:
       with:
         node-version: '18'
         cache: 'npm'
-        cache-dependency-path: frontend/package.json
+        cache-dependency-path: FE/package-lock.json
 
     - name: Install frontend dependencies
       run: |
-        cd frontend
+        cd FE
         npm ci
 
     - name: Build frontend
       run: |
-        cd frontend
+        cd FE
         npm run build --if-present

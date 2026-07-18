@@ -1,6 +1,15 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.routes import chat, documents
+from backend.app.database import engine
+from backend.app.models import Base
+
+logger = logging.getLogger(__name__)
+
+# Create database tables on startup
+Base.metadata.create_all(bind=engine)
+logger.info("Database tables initialized")
 
 app = FastAPI(
     title="Vietnam AI Innovation Challenge 2026 API",
@@ -28,6 +37,11 @@ def read_root():
         "message": "Vietnam AI Innovation Challenge 2026 Backend is running.",
         "docs": "/docs"
     }
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    logger.info("FastAPI startup - Database initialized")
 
 if __name__ == "__main__":
     import uvicorn

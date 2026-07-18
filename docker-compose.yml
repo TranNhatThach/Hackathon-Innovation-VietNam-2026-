@@ -1,18 +1,19 @@
 version: '3.8'
 
 services:
-  # --- Frontend (React + Vite) ---
+  # --- Frontend (Next.js) ---
   frontend:
     build:
-      context: ./frontend
+      context: ./FE
       dockerfile: Dockerfile
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - ./FE:/app
     environment:
       - VITE_API_URL=http://localhost:${BACKEND_PORT:-8000}
+      - NEXT_PUBLIC_API_URL=http://localhost:${BACKEND_PORT:-8000}
+      - NEXT_TELEMETRY_DISABLED=1
     depends_on:
       - backend
 

@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.routes import chat, documents
+from backend.app.routes import appointments, chat, doctors, documents, visits
 from backend.app.database import engine
 from backend.app.models import Base
 
@@ -29,6 +29,9 @@ app.add_middleware(
 # Register routes
 app.include_router(chat.router)
 app.include_router(documents.router)
+app.include_router(appointments.router)
+app.include_router(visits.router)
+app.include_router(doctors.router)
 
 @app.get("/")
 def read_root():

@@ -1,7 +1,10 @@
 import logging
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.routes import appointments, chat, doctors, documents, visits
+from backend.app.routes import appointments, chat, doctors, documents, visits, audio
 from backend.app.database import engine
 from backend.app.models import Base
 
@@ -32,6 +35,7 @@ app.include_router(documents.router)
 app.include_router(appointments.router)
 app.include_router(visits.router)
 app.include_router(doctors.router)
+app.include_router(audio.router)
 
 @app.get("/")
 def read_root():

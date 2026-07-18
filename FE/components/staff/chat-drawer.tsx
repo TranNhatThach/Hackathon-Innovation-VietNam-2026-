@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import remarkGfm from "remark-gfm";
 import { Icon } from "@/components/shared/icon";
 import { Button } from "@/components/shared/ui";
 import { getApiBaseUrl } from "@/lib/api";
+// NEW: STT/TTS Integration
+import { useSTT } from "@/hooks/useSTT";
+import { useTTS } from "@/hooks/useTTS";
 
 const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false, loading: () => <p>Đang tải...</p> });
 type Mode = "procedure" | "operations" | "patient";
@@ -64,6 +67,49 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // NEW: STT Integration
+  const { supported: sttSupported, listening, isProcessing: sttProcessing, realTimeTranscript, errorMessage, toggleListening, stopListening } = useSTT();
+
+  // NEW: TTS Integration
+  const { supported: ttsSupported, speaking, muted, toggleMute, speak, cancel: cancelSpeech } = useTTS();
+
+  // NEW: Track previous loading state to detect streaming completion
+  const prevLoadingRef = useRef(false);
+
+  // NEW: Bind real-time transcript to query input value dynamically
+  const queryBaseRef = useRef("");
+
+  useEffect(() => {
+    if (listening) {
+      queryBaseRef.current = query;
+    }
+  }, [listening]);
+
+  useEffect(() => {
+    if (listening && realTimeTranscript) {
+      setQuery(queryBaseRef.current ? queryBaseRef.current + " " + realTimeTranscript : realTimeTranscript);
+    }
+  }, [realTimeTranscript, listening]);
+
+  // NEW: Auto-speak when streaming completes (loading goes true→false)
+  useEffect(() => {
+    if (prevLoadingRef.current && !loading && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === "assistant" && lastMessage.content) {
+        speak(lastMessage.content);
+      }
+    }
+    prevLoadingRef.current = loading;
+  }, [loading, messages, speak]);
+
+  // NEW: Stop STT/TTS when drawer closes
+  useEffect(() => {
+    if (!open) {
+      stopListening();
+      cancelSpeech();
+    }
+  }, [open, stopListening, cancelSpeech]);
+
   const selected = visits.find((visit) => visit.visit_code === visitCode) ?? null;
   const filteredVisits = useMemo(() => {
     const value = visitSearch.trim().toLowerCase();
@@ -92,6 +138,11 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
 
   const ask = async (value = query) => {
     const text = value.trim(); if (!text || loading) return;
+
+    // NEW: Stop listening and cancel speech when sending a new message
+    stopListening();
+    cancelSpeech();
+
     setQuery("");
     if (mode === "patient") {
       if (!selected) return;
@@ -126,10 +177,10 @@ export function ChatDrawer({ open, onClose }: { open: boolean; onClose: () => vo
 
   if (!open) return null;
   return <><button className="drawer-scrim is-open" aria-label="Đóng trợ lý" onClick={onClose}/><aside className="chat-drawer is-open" role="dialog" aria-modal="true" aria-label="Trợ lý nhân viên">
-    <header><div className="chat-avatar"><Icon name="bot"/></div><div><strong>Trợ lý nhân viên</strong><span><i/> Dữ liệu trực tuyến · PostgreSQL</span></div><button className="icon-button" onClick={onClose} aria-label="Đóng trợ lý"><Icon name="close"/></button></header>
+    <header><div className="chat-avatar"><Icon name="bot"/></div><div><strong>Trợ lý nhân viên</strong><span><i/> Dữ liệu trực tuyến · PostgreSQL</span></div>{/* NEW: TTS mute toggle in header */}{ttsSupported && <button className={`icon-button tts-toggle${muted ? "" : " is-active"}${speaking ? " is-speaking" : ""}`} onClick={toggleMute} aria-label={muted ? "Bật đọc tự động" : "Tắt đọc tự động"} title={muted ? "Bật đọc tự động" : "Tắt đọc tự động"}><Icon name={muted ? "volume-off" : "volume"} size={18}/></button>}<button className="icon-button" onClick={onClose} aria-label="Đóng trợ lý"><Icon name="close"/></button></header>
     <div className="chat-mode" role="tablist">{(["procedure", "operations", "patient"] as Mode[]).map((item) => <button key={item} role="tab" aria-selected={mode === item} onClick={() => { setMode(item); setMessages([]); setQuery(""); }}>{item === "procedure" ? "Quy trình" : item === "operations" ? "Vận hành" : "Bệnh nhân"}</button>)}</div>
     {mode === "patient" && <div className="chat-context-select"><span>Tìm lượt khám thật</span><input value={visitSearch} onChange={(event) => setVisitSearch(event.target.value)} placeholder="Tên, mã lượt, số điện thoại..."/><select value={visitCode} onChange={(event) => { setVisitCode(event.target.value); setMessages([]); }}>{filteredVisits.length === 0 && <option value="">Chưa có lượt khám đã xác nhận</option>}{filteredVisits.map((visit) => <option value={visit.visit_code} key={visit.visit_code}>{visit.queue_number} · {visit.patient_name} · {visit.stage_label}</option>)}</select>{selected && <><small><Icon name="route" size={13}/> Hiện tại: {selected.stage_label}</small><span>Cập nhật bước hành trình</span><select value={selected.stage} disabled={loading} onChange={(event) => void updateStage(event.target.value)}>{stages.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></>}</div>}
     <div className="chat-body" aria-live="polite">{messages.length === 0 && <><div className="assistant-intro"><Icon name={mode === "patient" ? "users" : mode === "operations" ? "chart" : "book"}/><strong>{mode === "patient" ? selected ? `Đang tra cứu: ${selected.queue_number} · ${selected.patient_name}` : "Chưa có lượt khám thật" : "Trợ lý nghiệp vụ"}</strong><p>{mode === "patient" ? "Trạng thái được đọc trực tiếp từ hành trình người bệnh, không do AI suy đoán." : "Tra cứu thông tin hỗ trợ nhân viên."}</p></div><p className="suggestion-label">Gợi ý câu hỏi</p>{prompts[mode].map((prompt) => <button className="chat-suggestion" disabled={mode === "patient" && !selected} key={prompt} onClick={() => void ask(prompt)}>{prompt}<Icon name="arrow" size={17}/></button>)}</>}{messages.map((message, index) => <div key={index} className={`chat-bubble chat-bubble--${message.role}`}><ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown></div>)}{loading && <div className="typing" role="status">Đang cập nhật...</div>}</div>
-    <form className="chat-input" onSubmit={(event) => { event.preventDefault(); void ask(); }}><label><span className="sr-only">Nhập câu hỏi</span><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nhập câu hỏi của bạn..." rows={2}/></label><Button type="submit" disabled={!query.trim() || loading || (mode === "patient" && !selected)}><Icon name="arrow"/></Button></form>
+    <form className="chat-input" style={{ flexWrap: 'wrap' }} onSubmit={(event) => { event.preventDefault(); void ask(); }}>{/* STEP 3: Display error message elegantly */}{errorMessage && <div className="stt-error"><Icon name="alert" size={14}/> {errorMessage}</div>}<label style={{ width: errorMessage ? '100%' : undefined }}><span className="sr-only">Nhập câu hỏi</span><textarea value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nhập câu hỏi của bạn..." rows={2}/></label>{/* NEW: STT microphone button */}{sttSupported && <button type="button" className={`mic-button${listening ? " is-listening" : ""}${sttProcessing ? " is-processing" : ""}`} disabled={sttProcessing} onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleListening(); }} aria-label={listening ? "Dừng ghi âm" : sttProcessing ? "Đang xử lý âm thanh..." : "Nói để nhập"} title={listening ? "Dừng ghi âm" : sttProcessing ? "Đang xử lý âm thanh..." : "Nhấn để nói"}><Icon name={listening ? "mic-off" : sttProcessing ? "refresh" : "mic"} size={18}/></button>}<Button type="submit" disabled={!query.trim() || loading || (mode === "patient" && !selected)}><Icon name="arrow"/></Button></form>
   </aside></>;
 }

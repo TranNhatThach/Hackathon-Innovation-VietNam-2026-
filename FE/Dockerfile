@@ -9,7 +9,10 @@ RUN npm install
 # Copy application files
 COPY . .
 
-# Expose Next.js dev server port
+# Build Next.js application
+RUN npm run build
+
+# Expose Next.js production server port
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "start"]

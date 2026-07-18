@@ -16,7 +16,7 @@ FPT_MODEL = os.getenv("FPT_AI_FACTORY_MODEL", "gpt-4o-mini")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Prompts Directory
-PROMPTS_DIR = ROOT_DIR / "prompts"
+PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 def load_prompt(filename: str) -> str:
     path = PROMPTS_DIR / filename

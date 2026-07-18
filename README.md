@@ -167,6 +167,8 @@ Fill in the API keys provided by the challenge sponsors:
 *   `FPT_AI_FACTORY_BASE_URL`: Endpoint url (usually `https://mkp-api.fptcloud.com`).
 *   `FPT_AI_FACTORY_MODEL`: The LLM name supplied at the event (e.g. `GLM-5.2`).
 *   `ENCRYPTION_KEY`: A secure 64-character hex key for patient data encryption (e.g. generated key in `.env.example`).
+*   `FPT_TTS_MODEL` *(Optional)*: The Text-to-Speech model name (defaults to `FPT.AI-VITs`).
+*   `FPT_TTS_VOICE` *(Optional)*: The voice speaker configuration (defaults to `banmai`).
 
 ### 3. Launch the Stack
 Start all services (Next.js, FastAPI, PostgreSQL, Redis, Qdrant) in detached mode:

@@ -242,7 +242,7 @@ make evaluate
 
 * **Tran Nhat Thach** - [GitHub](https://github.com/TranNhatThach) (Team Lead)
 * **Nguyen Ngoc Minh Tam** - [GitHub](https://github.com/taminguyen04) (Project Manager)
-* **Tran Trung Hieu 2** - [GitHub](https://github.com/dat-nnguyen) (AI Engineer / Backend Developer)
+* **Tran Trung Hieu** - [GitHub](https://github.com/dat-nnguyen) (AI Engineer / Backend Developer)
 * **Nguyen Tuan Dat** - [GitHub](https://github.com/kutephomaique) (Frontend Engineer / Fullstack Developer)
 
 

@@ -49,7 +49,6 @@ function shouldShowSupport(text: string): boolean {
 
 export function PatientFaq() {
   const [query, setQuery] = useState("");
-  const [asked, setAsked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [support, setSupport] = useState(false);
   const [aiResponse, setAiResponse] = useState("");
@@ -61,7 +60,6 @@ export function PatientFaq() {
 
     setQuery("");
     setLoading(true);
-    setAsked(true);
     setAiResponse("");
     setSupport(false);
 

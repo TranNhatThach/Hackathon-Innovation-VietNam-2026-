@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 EMERGENCY_RESPONSE = (
     "⚠️ **CẢNH BÁO KHẨN CẤP:** Triệu chứng của bạn có thể là dấu hiệu của một tình trạng tim mạch khẩn cấp. \n\n"
     "Vui lòng **NGỪNG** đặt câu hỏi và thực hiện ngay các bước sau:\n"
-    "1. **Gọi ngay Cấp cứu 115** hoặc Hotline Cấp cứu của Bệnh viện: **0243.8248362**.\n"
-    "2. Di chuyển ngay lập tức đến **Khoa Cấp cứu - Bệnh viện Tim Hà Nội** (Địa chỉ: 92 Trần Hưng Đạo, Hoàn Kiếm, Hà Nội hoặc Cơ sở 2: Đường Võ Chí Công, Tây Hồ, Hà Nội) hoặc cơ sở y tế gần nhất.\n"
+    "1. **Gọi ngay Cấp cứu 115** hoặc Hotline Bệnh viện: **19001082** (hoặc Cấp cứu Cơ sở 1: **0243.8248362**).\n"
+    "2. Di chuyển ngay lập tức đến **Khoa Cấp cứu - Bệnh viện Tim Hà Nội** (Địa chỉ: 92 Trần Hưng Đạo, Hoàn Kiếm, Hà Nội hoặc Cơ sở 2: Số 695 Lạc Long Quân, Tây Hồ, Hà Nội) hoặc cơ sở y tế gần nhất.\n"
     "3. Không tự lái xe, hãy nhờ người nhà hỗ trợ hoặc đợi xe cấp cứu.\n\n"
     "*Lưu ý: Trợ lý AI không thể đưa ra chẩn đoán y khoa hay tư vấn điều trị trong tình huống khẩn cấp.*"
 )

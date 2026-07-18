@@ -6,7 +6,7 @@ from agent.core.guardrails import check_emergency
 
 FALLBACK_RESPONSE = (
     "Xin lỗi, tôi không tìm thấy thông tin chính thức về yêu cầu của bạn trong cơ sở dữ liệu của Bệnh viện Tim Hà Nội. "
-    "Vui lòng liên hệ Hotline Chăm sóc khách hàng: **1900 1234** (7:30 - 17:00) hoặc đường dây nóng Cấp cứu: **0243.8248362** để được hỗ trợ trực tiếp."
+    "Vui lòng liên hệ Hotline Bệnh viện: **19001082** (phục vụ 24/7) hoặc email: **cskh@timhanoi.vn** để được hỗ trợ trực tiếp."
 )
 
 def is_greeting_query(query: str) -> bool:
@@ -86,7 +86,7 @@ class ADKAgent:
             "lịch bác sĩ", "lich bac si", "lịch khám", "lich kham",
             "bác sĩ nào", "bac si nao", "tìm bác sĩ", "tim bac si",
             "danh sách bác sĩ", "ds bac si", "chuyên khoa", "chuyen khoa",
-            "khung giờ", "khung gio", "còn trống", "con trong",
+            "khung giờ trống", "khung gio trong", "còn trống", "con trong",
         ]):
             # Booking/scheduling/doctor-search queries will use Tools
             system_prompt = (
@@ -124,12 +124,16 @@ class ADKAgent:
                 # ❌ NO RELEVANT DOCUMENTS - Use flexible mode (general knowledge + guardrails)
                 system_prompt = (
                     f"{self.system_instruction}\n\n"
-                    "## LƯU Ý KỸ THUẬT:\n"
+                    "## LƯU Ý KỸ THUẬT (RẤT QUAN TRỌNG):\n"
                     "Không tìm thấy thông tin cụ thể về yêu cầu này trong cơ sở dữ liệu của Bệnh viện Tim Hà Nội.\n"
-                    "Bạn có thể:\n"
-                    "1. Trả lời dựa trên kiến thức chung về bệnh viện (giờ làm, hotline chung).\n"
-                    "2. Hướng dẫn người dùng liên hệ trực tiếp với các bộ phòng hoặc hotline để được hỗ trợ chính xác hơn.\n"
-                    "3. Không bịa đặt thông tin y khoa hay lịch khám cụ thể.\n"
+                    "Bạn PHẢI tuân thủ các quy tắc sau:\n"
+                    "1. TUYỆT ĐỐI không tự tiện bịa đặt hay suy diễn bất kỳ địa chỉ, số điện thoại, email hoặc hotline giả nào (ví dụ: các hotline 1900 6165, 024 3834 8888, hoặc địa chỉ tại Nguyễn Đình Hoàn).\n"
+                    "2. Nếu cần cung cấp thông tin liên hệ hoặc địa chỉ, chỉ sử dụng thông tin chính thức đã có trong System Prompt:\n"
+                    "   - Cơ sở 1: 92 Trần Hưng Đạo, Hoàn Kiếm, Hà Nội.\n"
+                    "   - Cơ sở 2: Số 695 Lạc Long Quân, Tây Hồ, Hà Nội.\n"
+                    "   - Hotline hỗ trợ 24/7: 19001082.\n"
+                    "   - Email: cskh@timhanoi.vn.\n"
+                    "3. Không được bịa đặt thông tin y khoa, giá dịch vụ hay lịch khám cụ thể nằm ngoài tri thức chính thức.\n"
                 )
             
             has_context = True

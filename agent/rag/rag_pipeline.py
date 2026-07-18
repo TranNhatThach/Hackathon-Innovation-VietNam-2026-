@@ -138,17 +138,50 @@ import json
 
 def rerank_chunks(query: str, chunks: List[Dict[str, Any]], top_n: int = 3) -> List[Dict[str, Any]]:
     """
-    Re-ranks retrieved chunks using an LLM-based ranker (FPT AI Factory).
-    Falls back to original order if reranking fails.
+    Re-ranks retrieved chunks using an LLM-based ranker or dedicated Rerank API (FPT AI Factory).
+    Attempts to use BGE-Reranker-v2-m3 via the /rerank endpoint, falling back to prompt-based LLM ranking.
     """
     if not chunks:
         return []
     if len(chunks) <= 1:
         return chunks[:top_n]
 
+    import httpx
     from agent.core.fpt_client import FPTAIFactoryClient
     client = FPTAIFactoryClient()
 
+    # 1. Attempt to use FPT AI Factory BGE-Reranker-v2-m3 via /rerank API
+    try:
+        url = f"{client.base_url}/rerank"
+        payload = {
+            "model": "bge-reranker-v2-m3",
+            "query": query,
+            "documents": [chunk["text"] for chunk in chunks],
+            "top_n": top_n
+        }
+        with httpx.Client(timeout=10.0) as http_client:
+            response = http_client.post(url, headers=client.headers, json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get("results", [])
+                if results:
+                    reranked = []
+                    seen = set()
+                    for item in results:
+                        idx = item.get("index")
+                        if idx is not None and 0 <= idx < len(chunks) and idx not in seen:
+                            reranked.append(chunks[idx])
+                            seen.add(idx)
+                    # Add any remaining chunks missed by the reranker
+                    for idx, chunk in enumerate(chunks):
+                        if idx not in seen:
+                            reranked.append(chunk)
+                    logger.info("Successfully reranked chunks using FPT bge-reranker-v2-m3 API")
+                    return reranked[:top_n]
+    except Exception as e:
+        logger.warning(f"FPT /rerank API not available or failed, falling back to LLM Reranking: {e}")
+
+    # 2. Fallback to prompt-based LLM reranker using FPT chat completions
     prompt = (
         "Bạn là hệ thống Reranking (đánh giá và xếp hạng tài liệu) thuộc RAG Pipeline của Google ADK 2.0.\n"
         "Nhiệm vụ của bạn là đánh giá mức độ liên quan của các đoạn văn bản (chunks) dưới đây đối với câu hỏi của người dùng.\n\n"
@@ -186,7 +219,7 @@ def rerank_chunks(query: str, chunks: List[Dict[str, Any]], top_n: int = 3) -> L
                     reranked.append(chunk)
             return reranked[:top_n]
     except Exception as e:
-        logger.error(f"Failed to rerank chunks: {e}")
+        logger.error(f"Failed to rerank chunks using fallback: {e}")
 
     return chunks[:top_n]
 

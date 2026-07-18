@@ -43,8 +43,11 @@ def read_root():
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database on startup"""
+    """Initialize database on startup and launch background worker"""
+    import asyncio
+    from backend.app.worker import run_reminder_worker
     logger.info("FastAPI startup - Database initialized")
+    asyncio.create_task(run_reminder_worker())
 
 if __name__ == "__main__":
     import uvicorn

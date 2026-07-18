@@ -7,6 +7,7 @@ import uuid
 from agent import create_default_agent, check_emergency
 from backend.app.database import get_db
 from backend.app.services import ConversationService
+from backend.app.models import Patient, HumanCase
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,42 @@ def chat_endpoint(
         ConversationService.add_message(db, session_id, "user", request.message)
     except Exception:
         pass
+
+    # 4b. Check if patient has an active HumanCase (AI Agent Muted/Escalated)
+    try:
+        patient = None
+        if request.user_id:
+            user_clean = request.user_id.strip()
+            patient = db.query(Patient).filter(
+                (Patient.phone == user_clean) | (Patient.patient_code == user_clean)
+            ).first()
+        
+        if patient:
+            active_case = db.query(HumanCase).filter(
+                HumanCase.patient_id == patient.id,
+                HumanCase.status.in_(["OPEN", "IN_PROGRESS"])
+            ).first()
+            
+            if active_case:
+                escalated_response = (
+                    "Yêu cầu của bạn hiện đã được chuyển giao cho nhân viên hỗ trợ y tế. "
+                    "Nhân viên sẽ phản hồi bạn trực tiếp trong cuộc hội thoại này hoặc liên hệ qua số điện thoại. Vui lòng đợi trong giây lát."
+                )
+                try:
+                    ConversationService.add_message(db, session_id, "assistant", escalated_response)
+                except Exception:
+                    pass
+                if request.stream:
+                    def escalated_generator():
+                        yield escalated_response
+                    return StreamingResponse(escalated_generator(), media_type="text/plain")
+                return {
+                    "response": escalated_response,
+                    "session_id": session_id,
+                    "from_db": False
+                }
+    except Exception as e:
+        logger.error(f"Error in HumanCase check: {e}")
 
     # 5. Check emergency guardrail
     emergency_warning = check_emergency(request.message)

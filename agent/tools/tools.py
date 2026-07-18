@@ -1,7 +1,12 @@
 import json
 import logging
-from datetime import date, timedelta
+import uuid
+from datetime import date, timedelta, datetime, time
 from typing import Dict, Any, List, Optional
+from sqlalchemy import func
+
+from backend.app.database import SessionLocal
+from backend.app.models import Doctor as DBDoctor, Patient, Appointment as DBAppointment, Visit, VisitJourneyEvent, HumanCase
 
 
 logger = logging.getLogger(__name__)
@@ -142,10 +147,6 @@ DOCTOR_DATABASE: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# In-memory list of created appointments (in production this would be a DB table)
-APPOINTMENTS: List[Dict[str, Any]] = []
-
-
 def _find_doctor_key(doctor_name: str) -> Optional[str]:
     """
     Fuzzy-match a doctor name input against the database keys.
@@ -169,6 +170,14 @@ def _find_doctor_key(doctor_name: str) -> Optional[str]:
             return key
 
     return None
+
+
+def time_to_slot(dt: datetime) -> str:
+    start_time = dt.time()
+    start_str = start_time.strftime("%H:%M")
+    end_dt = dt + timedelta(minutes=30)
+    end_str = end_dt.strftime("%H:%M")
+    return f"{start_str} - {end_str}"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -199,12 +208,26 @@ def get_doctor_schedule(doctor_name: str, date: str) -> str:
     schedule = doctor.get("schedule", {})
     available_slots = schedule.get(date, [])
 
-    # Remove already-booked slots
-    booked_slots = {
-        appt["time_slot"]
-        for appt in APPOINTMENTS
-        if appt["doctor_name"].lower() == doctor_key and appt["date"] == date
-    }
+    # Query active appointments for this doctor on this date from PostgreSQL
+    try:
+        date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        return f"Ngày '{date}' không đúng định dạng YYYY-MM-DD."
+
+    start_of_day = datetime.combine(date_obj, datetime.min.time())
+    end_of_day = datetime.combine(date_obj, datetime.max.time())
+
+    with SessionLocal() as db:
+        booked_appts = db.query(DBAppointment).filter(
+            DBAppointment.doctor == doctor["full_name"],
+            DBAppointment.scheduled_at >= start_of_day,
+            DBAppointment.scheduled_at <= end_of_day,
+            DBAppointment.status != "Đã thay thế",
+            DBAppointment.status != "Đã hủy"
+        ).all()
+
+        booked_slots = {time_to_slot(appt.scheduled_at) for appt in booked_appts}
+
     free_slots = [s for s in available_slots if s not in booked_slots]
 
     if not free_slots:
@@ -262,35 +285,99 @@ def book_appointment(patient_name: str, phone: str, doctor_name: str, date: str,
             f"Các khung giờ còn lại: {', '.join(available_slots)}."
         )
 
-    # Check if slot is already booked
-    already_booked = any(
-        appt["doctor_name"] == doctor_key and appt["date"] == date and appt["time_slot"] == time_slot
-        for appt in APPOINTMENTS
-    )
-    if already_booked:
-        return f"Khung giờ '{time_slot}' ngày {date} với bác sĩ {doctor['full_name']} đã có người đặt. Vui lòng chọn khung giờ khác."
-
     # Validate phone number (basic check)
     phone_clean = phone.strip().replace(" ", "").replace("-", "").replace(".", "")
     if len(phone_clean) < 10 or not phone_clean.isdigit():
         return f"Số điện thoại '{phone}' không hợp lệ. Vui lòng nhập số điện thoại gồm 10-11 chữ số."
 
-    # Confirm booking
-    appointment_id = f"HEN-{date.replace('-', '')}-{len(APPOINTMENTS) + 1:03d}"
-    appointment = {
-        "id": appointment_id,
-        "patient_name": patient_name,
-        "phone": phone_clean,
-        "doctor_name": doctor_key,
-        "doctor_full_name": doctor["full_name"],
-        "chuyên_khoa": doctor["chuyên_khoa"],
-        "phòng": doctor["phòng"],
-        "date": date,
-        "time_slot": time_slot,
-        "status": "Đã xác nhận tạm thời"
-    }
-    APPOINTMENTS.append(appointment)
-    logger.info(f"New appointment booked: {appointment}")
+    # Parse slot time
+    try:
+        date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+        start_time_str = time_slot.split("-")[0].strip()
+        time_obj = datetime.strptime(start_time_str, "%H:%M").time()
+        scheduled_at = datetime.combine(date_obj, time_obj)
+    except Exception:
+        return f"Không thể phân tích ngày khám hoặc khung giờ '{time_slot}'."
+
+    with SessionLocal() as db:
+        # Check if doctor exists in DB
+        db_doctor = db.query(DBDoctor).filter(DBDoctor.display_name == doctor["full_name"], DBDoctor.is_active == True).first()
+        if not db_doctor:
+            return f"Bác sĩ {doctor['full_name']} hiện đang ngừng hoạt động hoặc không có trên hệ thống."
+
+        # Check if slot is already booked
+        already_booked = db.query(DBAppointment).filter(
+            DBAppointment.doctor == doctor["full_name"],
+            DBAppointment.scheduled_at == scheduled_at,
+            DBAppointment.status != "Đã thay thế",
+            DBAppointment.status != "Đã hủy"
+        ).first()
+
+        if already_booked:
+            return f"Khung giờ '{time_slot}' ngày {date} với bác sĩ {doctor['full_name']} đã có người đặt. Vui lòng chọn khung giờ khác."
+
+        # Find or create patient
+        patient = db.query(Patient).filter(Patient.phone == phone_clean).first()
+        if patient is None:
+            patient = Patient(
+                patient_code=f"BN-{uuid.uuid4().hex[:10].upper()}",
+                display_name=patient_name.strip(),
+                phone=phone_clean,
+                preferred_channel="web",
+                is_demo=False,
+            )
+            db.add(patient)
+            db.flush()
+        else:
+            patient.display_name = patient_name.strip()
+            patient.is_demo = False
+
+        # Create Appointment
+        appointment_code = f"HEN-{datetime.now():%y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+        appointment = DBAppointment(
+            appointment_code=appointment_code,
+            patient_id=patient.id,
+            scheduled_at=scheduled_at,
+            facility=db_doctor.facility,
+            department=db_doctor.department,
+            doctor=db_doctor.display_name,
+            visit_type="Đặt qua AI Assistant",
+            payment_type="Dịch vụ",
+            status="Chờ xác nhận"
+        )
+        db.add(appointment)
+        db.flush()
+
+        # Create Visit
+        visit_code = f"LUOT-{datetime.now():%y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+        visit = Visit(
+            visit_code=visit_code,
+            patient_id=patient.id,
+            appointment_id=appointment.id,
+            queue_number=f"H{appointment.id:03d}",
+            stage="SCHEDULED",
+            stage_label="Chờ xác nhận lịch",
+            entered_stage_at=datetime.utcnow(),
+            payment_type=appointment.payment_type,
+            payment_status="Chờ thanh toán",
+            priority="Bình thường",
+            next_action="Chờ nhân viên xác nhận và phân công bác sĩ",
+            status="ACTIVE"
+        )
+        db.add(visit)
+        db.flush()
+
+        # Create Event
+        db.add(VisitJourneyEvent(
+            visit_id=visit.id,
+            stage="SCHEDULED",
+            stage_label="Chờ xác nhận lịch",
+            status="current",
+            occurred_at=datetime.utcnow(),
+            note="Tạo tự động qua cuộc gọi đặt lịch của Trợ lý AI"
+        ))
+
+        db.commit()
 
     return json.dumps({
         "status": "success",
@@ -301,11 +388,21 @@ def book_appointment(patient_name: str, phone: str, doctor_name: str, date: str,
             f"Chuyên khoa: {doctor['chuyên_khoa']}\n"
             f"Phòng: {doctor['phòng']}\n"
             f"Ngày: {date} – Giờ: {time_slot}\n"
-            f"Mã lịch hẹn: {appointment_id}\n"
+            f"Mã lịch hẹn: {appointment_code}\n"
             f"📋 Vui lòng đến trước 15 phút và mang theo CCCD, thẻ BHYT (nếu có).\n"
             f"📞 Liên hệ hủy/đổi lịch: 024 3942 2430"
         ),
-        "appointment": appointment
+        "appointment": {
+            "id": appointment_code,
+            "patient_name": patient_name,
+            "phone": phone_clean,
+            "doctor_full_name": doctor["full_name"],
+            "chuyên_khoa": doctor["chuyên_khoa"],
+            "phòng": doctor["phòng"],
+            "date": date,
+            "time_slot": time_slot,
+            "status": "Chờ xác nhận"
+        }
     }, ensure_ascii=False)
 
 
@@ -320,24 +417,34 @@ def search_doctors(specialty: str = "", name: str = "") -> str:
     Returns:
         JSON string with list of matching doctors.
     """
-    results = []
     spec_lower = specialty.strip().lower()
     name_lower = name.strip().lower()
 
-    for key, doctor in DOCTOR_DATABASE.items():
+    with SessionLocal() as db:
+        query = db.query(DBDoctor).filter(DBDoctor.is_active == True)
+        doctors = query.all()
+
+    results = []
+    for doc in doctors:
         match = False
-        if spec_lower and spec_lower in doctor["chuyên_khoa"].lower():
+        if spec_lower and spec_lower in doc.department.lower():
             match = True
-        if name_lower and name_lower in key:
+        if name_lower and name_lower in doc.display_name.lower():
             match = True
         if not spec_lower and not name_lower:
-            match = True  # Return all doctors if no filter
+            match = True
 
         if match:
+            # Enrich room information from config
+            room = "Đang cập nhật"
+            doc_key = _find_doctor_key(doc.display_name)
+            if doc_key and doc_key in DOCTOR_DATABASE:
+                room = DOCTOR_DATABASE[doc_key].get("phòng", "Đang cập nhật")
+
             results.append({
-                "full_name": doctor["full_name"],
-                "chuyên_khoa": doctor["chuyên_khoa"],
-                "phòng": doctor["phòng"],
+                "full_name": doc.display_name,
+                "chuyên_khoa": doc.department,
+                "phòng": room,
             })
 
     if not results:
@@ -350,4 +457,52 @@ def search_doctors(specialty: str = "", name: str = "") -> str:
         "total": len(results),
         "doctors": results,
         "note": "Để đặt lịch hẹn, vui lòng cung cấp tên bác sĩ, ngày và giờ mong muốn."
+    }, ensure_ascii=False)
+
+
+def escalate_to_human(patient_phone: str, reason: str, urgent: bool = False) -> str:
+    """
+    Chuyển giao cuộc hội thoại của bệnh nhân cho nhân viên hỗ trợ y tế thật.
+    Dùng khi bệnh nhân yêu cầu gặp người thật, hỏi thông tin quá phức tạp hoặc tỏ ra giận dữ.
+
+    Args:
+        patient_phone: Số điện thoại của bệnh nhân cần hỗ trợ
+        reason: Lý do chuyển tiếp hỗ trợ (ví dụ: 'Hỏi về gộp thẻ BHYT', 'Khách hàng giận dữ')
+        urgent: Trạng thái khẩn cấp (True nếu cần xử lý ngay lập tức)
+
+    Returns:
+        Thông báo xác nhận đã chuyển tiếp thành công.
+    """
+    phone_clean = patient_phone.strip().replace(" ", "").replace("-", "").replace(".", "")
+    with SessionLocal() as db:
+        patient = db.query(Patient).filter(Patient.phone == phone_clean).first()
+        patient_id = patient.id if patient else None
+
+        active_visit = None
+        if patient_id:
+            active_visit = db.query(Visit).filter(Visit.patient_id == patient_id, Visit.status == "ACTIVE").first()
+
+        case_code = f"CASE-{datetime.now():%y%m%d}-{uuid.uuid4().hex[:6].upper()}"
+        human_case = HumanCase(
+            case_code=case_code,
+            patient_id=patient_id,
+            visit_id=active_visit.id if active_visit else None,
+            case_type="Hỗ trợ y tế",
+            trigger=reason.strip(),
+            priority="HIGH" if urgent else "NORMAL",
+            sla_due_at=datetime.utcnow() + timedelta(minutes=15 if urgent else 60),
+            owner=None,
+            status="OPEN"
+        )
+        db.add(human_case)
+        db.commit()
+
+    return json.dumps({
+        "status": "success",
+        "message": (
+            "✅ Hệ thống đã tiếp nhận yêu cầu hỗ trợ trực tiếp của bạn!\n"
+            f"Mã sự vụ hỗ trợ: {case_code}\n"
+            "Nhân viên hỗ trợ y tế đang vào phòng trò chuyện để hỗ trợ bạn. Vui lòng đợi trong giây lát."
+        ),
+        "case_code": case_code
     }, ensure_ascii=False)

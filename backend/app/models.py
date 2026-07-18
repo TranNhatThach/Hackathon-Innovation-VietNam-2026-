@@ -3,8 +3,38 @@ SQLAlchemy ORM Models for Database Schema
 """
 from datetime import datetime
 from sqlalchemy import Boolean, Column, Date, Integer, String, Text, DateTime, ForeignKey, Index, UniqueConstraint
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
+from backend.app.security import encrypt_value, decrypt_value
+
+class EncryptedString(TypeDecorator):
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return encrypt_value(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return decrypt_value(value)
+        return value
+
+class EncryptedText(TypeDecorator):
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return encrypt_value(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return decrypt_value(value)
+        return value
 
 
 class Conversation(Base):
@@ -58,10 +88,10 @@ class Patient(Base):
 
     id = Column(Integer, primary_key=True)
     patient_code = Column(String(50), nullable=False, unique=True, index=True)
-    display_name = Column(String(255), nullable=False)
+    display_name = Column(EncryptedString(255), nullable=False)
     date_of_birth = Column(Date, nullable=True)
-    phone = Column(String(30), nullable=True)
-    address = Column(String(500), nullable=True)
+    phone = Column(EncryptedString(30), nullable=True)
+    address = Column(EncryptedString(500), nullable=True)
     preferred_channel = Column(String(50), nullable=False, default="web")
     is_demo = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -160,7 +190,7 @@ class Medication(Base):
     name = Column(String(255), nullable=False)
     dosage = Column(String(100), nullable=False)
     schedule = Column(String(255), nullable=False)
-    instruction = Column(Text, nullable=False)
+    instruction = Column(EncryptedText, nullable=False)
     valid_from = Column(Date, nullable=True)
     valid_to = Column(Date, nullable=True)
     approved_by = Column(String(255), nullable=False)

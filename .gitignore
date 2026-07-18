@@ -58,6 +58,8 @@ out/
 # Database & Storage
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/knowledge_base.md
+!data/raw/Quy trình đón tiếp bệnh nhân.txt
 data/processed/*
 !data/processed/.gitkeep
 postgres_data/

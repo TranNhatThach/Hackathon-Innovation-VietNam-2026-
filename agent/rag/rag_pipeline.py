@@ -151,14 +151,14 @@ def retrieve_context(query: str, limit: int = 3, threshold: float = 0.30) -> Lis
         from qdrant_client.http import models as qdrant_models
         
         # 1. Nhánh 1: Vector Search (Dense)
-        vector_results = qdrant_client.search(
+        vector_results = qdrant_client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=query_vector,
+            query=query_vector,
             limit=candidate_limit
         )
         
         dense_hits = []
-        for res in vector_results:
+        for res in vector_results.points:
             if res.score >= threshold:
                 dense_hits.append({
                     "id": res.id,

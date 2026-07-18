@@ -12,10 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend application and agent modules
+# Copy backend application, agent, data and scripts modules
 COPY backend/ /app/backend/
 COPY agent/ /app/agent/
-COPY prompts/ /app/prompts/
+COPY data/ /app/data/
+COPY scripts/ /app/scripts/
 
 # Expose FastAPI default port
 EXPOSE 8000

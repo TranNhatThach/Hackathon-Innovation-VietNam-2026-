@@ -96,4 +96,4 @@ export interface Medication {
   approvedBy?: string;
 }
 export interface ApiEnvelope<T> { requestId: string; timestamp: string; freshness: string; source: "MOCK"; data: T; }
-export type IconName = "heart" | "calendar" | "search" | "route" | "message" | "file" | "shield" | "flask" | "pill" | "phone" | "home" | "users" | "kanban" | "bot" | "book" | "chart" | "bell" | "settings" | "clock" | "map" | "help" | "arrow" | "check" | "alert" | "menu" | "close" | "filter" | "refresh" | "chevron" | "user" | "more" | "inbox";
+export type IconName = "heart" | "calendar" | "search" | "route" | "message" | "file" | "shield" | "flask" | "pill" | "phone" | "home" | "users" | "kanban" | "bot" | "book" | "chart" | "bell" | "settings" | "clock" | "map" | "help" | "arrow" | "check" | "alert" | "menu" | "close" | "filter" | "refresh" | "chevron" | "user" | "more" | "inbox" | "microphone" | "volume" | "stop";

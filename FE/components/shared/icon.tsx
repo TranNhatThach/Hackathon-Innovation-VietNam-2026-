@@ -33,6 +33,9 @@ const paths: Record<IconName, React.ReactNode> = {
   user: <><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></>,
   more: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
   inbox: <><path d="M4 4h16v14H4z"/><path d="M4 13h4l2 3h4l2-3h4"/></>,
+  microphone: <><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></>,
+  volume: <><path d="M11 5 6 9H2v6h4l5 4Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 5a9 9 0 0 1 0 14"/></>,
+  stop: <rect x="6" y="6" width="12" height="12" rx="1"/>,
 };
 
 export function Icon({ name, size = 20, className = "" }: { name: IconName; size?: number; className?: string }) {

@@ -1,4 +1,6 @@
 :root{--navy:#0b3155;--navy-2:#082844;--blue:#1769aa;--blue-light:#eaf5fb;--cyan:#38a9c8;--red:#d8273f;--red-dark:#aa1730;--green:#17845b;--amber:#b96c00;--ink:#17324b;--muted:#63788b;--line:#dce6ed;--surface:#fff;--bg:#f5f8fa;--shadow:0 12px 35px rgba(15,49,77,.1);--radius:14px}
+.chat-input>.speech-error{display:none}
+.speech-mic{width:48px;height:48px;flex:0 0 auto;display:grid;place-items:center;border:1px solid #c5d9e3;border-radius:11px;background:#f4f9fb;color:var(--blue)}.speech-mic:hover:not(:disabled){background:#e4f2f7}.speech-mic.is-listening{color:#fff;background:#d94352;border-color:#d94352;animation:speech-pulse 1.2s infinite}.speech-mic:disabled{cursor:not-allowed;opacity:.45}.speech-play{display:inline-grid;place-items:center;width:30px;height:30px;margin-top:6px;border:1px solid #c8dce6;border-radius:50%;background:#f4f9fb;color:var(--blue)}.speech-play:hover{background:#e4f2f7}.speech-error{margin:6px 8px 0!important;color:#b52d3a!important;font-size:11px!important;text-align:left}@keyframes speech-pulse{50%{box-shadow:0 0 0 6px rgba(217,67,82,.16)}}
 *{box-sizing:border-box}
 html{scroll-behavior:auto;scroll-padding-top:88px}
 body{margin:0;color:var(--ink);background:var(--bg);font-family:Inter,"Segoe UI",Arial,sans-serif;font-size:15px;line-height:1.55}

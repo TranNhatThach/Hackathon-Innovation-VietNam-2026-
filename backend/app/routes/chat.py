@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 import uuid
 from agent import create_default_agent, check_emergency
+from agent.core.adk_agent import is_greeting_query
 from backend.app.database import get_db
 from backend.app.services import ConversationService
 from backend.app.models import Patient, HumanCase
@@ -112,6 +113,42 @@ def chat_endpoint(
                 }
     except Exception as e:
         logger.error(f"Error in HumanCase check: {e}")
+
+    # 4c. Routing-level Smart Cache Check
+    # Only cache if history is empty (first turn).
+    is_eligible = (
+        not formatted_history and
+        not is_greeting_query(request.message) and
+        not any(kw in request.message.lower() for kw in [
+            "đặt lịch", "dat lich", "hẹn khám", "hen kham",
+            "lịch bác sĩ", "lich bac si", "lịch khám", "lich kham",
+            "bác sĩ nào", "bac si nao", "tìm bác sĩ", "tim bac si",
+            "danh sách bác sĩ", "ds bac si", "chuyên khoa", "chuyen khoa",
+            "khung giờ trống", "khung gio trong", "còn trống", "con trong",
+        ])
+    )
+    if is_eligible:
+        try:
+            from agent.core.redis_client import redis_cache
+            cache_key = redis_cache.get_cache_key(request.message)
+            cached_val = redis_cache.get(cache_key)
+            if cached_val:
+                logger.info(f"Routing Level Cache HIT for message: {request.message.encode('ascii', errors='ignore').decode('ascii')}")
+                try:
+                    ConversationService.add_message(db, session_id, "assistant", cached_val)
+                except Exception:
+                    pass
+                if request.stream:
+                    def cached_generator():
+                        yield cached_val
+                    return StreamingResponse(cached_generator(), media_type="text/plain")
+                return {
+                    "response": cached_val,
+                    "session_id": session_id,
+                    "from_db": False
+                }
+        except Exception as e:
+            logger.warning(f"Error checking cache at routing level: {e}")
 
     # 5. Check emergency guardrail
     emergency_warning = check_emergency(request.message)

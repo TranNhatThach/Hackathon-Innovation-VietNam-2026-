@@ -36,7 +36,7 @@ export default function PatientHomePage() {
             <h1>Đi khám dễ dàng hơn,<br/><em>luôn biết bước tiếp theo</em></h1>
             <p>Đặt lịch, chuẩn bị giấy tờ và theo dõi số thứ tự trong một nơi. Nếu chưa quen dùng điện thoại, bạn có thể gọi tổng đài để được hướng dẫn.</p>
             <div className="hero-actions"><Link className="button button--primary button--large" href="/appointments?mode=book"><Icon name="calendar"/> Đặt lịch khám</Link><Link className="button button--secondary button--large" href="/appointments"><Icon name="search"/> Tôi đã có lịch hẹn</Link></div>
-            <div className="hero-support"><Icon name="phone"/><span><strong>Cần người hướng dẫn? Gọi 024 3942 2430</strong><small>Không dùng cho tình huống cấp cứu</small></span></div>
+            <div className="hero-support"><Icon name="phone"/><span><strong>Cần người hướng dẫn? Gọi 19001082</strong><small>Không dùng cho tình huống cấp cứu</small></span></div>
           </div>
           <div className="action-strip-heading">
             <span>Chọn việc bạn muốn làm</span>

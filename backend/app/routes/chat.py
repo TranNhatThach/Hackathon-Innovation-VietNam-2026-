@@ -182,7 +182,7 @@ def chat_endpoint(
                     pass
             except Exception as e:
                 logger.error(f"Streaming error: {e}")
-                error_msg = "Xin lỗi, đã xảy ra lỗi kết nối. Vui lòng thử lại hoặc gọi 024 3942 2430."
+                error_msg = "Xin lỗi, đã xảy ra lỗi kết nối. Vui lòng thử lại hoặc gọi Hotline Bệnh viện: 19001082."
                 yield error_msg
                 try:
                     ConversationService.add_message(db, session_id, "assistant", error_msg)
@@ -205,7 +205,7 @@ def chat_endpoint(
         }
     except Exception as e:
         logger.error(f"Agent execution error: {e}")
-        fallback = "Xin lỗi, đã xảy ra lỗi kết nối với mô hình AI. Vui lòng thử lại sau hoặc gọi Hotline: 024 3942 2430."
+        fallback = "Xin lỗi, đã xảy ra lỗi kết nối với mô hình AI. Vui lòng thử lại sau hoặc gọi Hotline Bệnh viện: 19001082."
         try:
             ConversationService.add_message(db, session_id, "assistant", fallback)
         except Exception:

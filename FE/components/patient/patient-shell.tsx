@@ -20,7 +20,7 @@ export function PatientShell({ children }: { children: React.ReactNode }) {
           <span>Cỡ chữ</span>
           <button type="button" aria-pressed={!largeText} onClick={() => setLargeText(false)}>A</button>
           <button type="button" aria-pressed={largeText} onClick={() => setLargeText(true)} aria-label="Dùng cỡ chữ lớn">A+</button>
-          <a href="tel:02439422430"><Icon name="phone" size={16} /> Tổng đài: 024 3942 2430</a>
+          <a href="tel:19001082"><Icon name="phone" size={16} /> Tổng đài: 19001082</a>
         </div>
       </div>
     </div>
@@ -39,13 +39,13 @@ export function PatientShell({ children }: { children: React.ReactNode }) {
     <footer className="patient-footer">
       <div className="container footer-grid">
         <div><Brand inverse /><p>Chăm sóc trái tim bằng chuyên môn, sự tận tâm và kết nối.</p></div>
-        <div><strong>Liên hệ</strong><p>92 Trần Hưng Đạo, Hoàn Kiếm, Hà Nội</p><p>Hotline: <a href="tel:02439422430">024 3942 2430</a></p></div>
+        <div><strong>Liên hệ</strong><p>92 Trần Hưng Đạo, Hoàn Kiếm, Hà Nội</p><p>Hotline: <a href="tel:19001082">19001082</a></p></div>
         <div><strong>Thông tin hữu ích</strong><Link href="/privacy">Chính sách bảo mật</Link><Link href="/terms">Điều khoản sử dụng</Link><Link href="/#cap-cuu">Hướng dẫn cấp cứu</Link><Link href="/procedures">Quy trình QT.25.01</Link><Link href="/staff/operations">Cổng nhân viên (bản dùng thử)</Link></div>
       </div>
       <div className="container footer-bottom">© 2026 Bản dùng thử Bệnh viện Tim Hà Nội · Không sử dụng cho mục đích y khoa</div>
     </footer>
     <div className="patient-mobile-help" aria-label="Liên hệ nhanh">
-      <a href="tel:02439422430"><Icon name="phone" size={18}/> Gọi tổng đài</a>
+      <a href="tel:19001082"><Icon name="phone" size={18}/> Gọi tổng đài</a>
       <Link href="/assistant"><Icon name="message" size={18}/> Hỏi đáp</Link>
     </div>
   </div>;

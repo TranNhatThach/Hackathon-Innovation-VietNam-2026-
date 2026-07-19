@@ -1,31 +1,89 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/shared/icon";
 import { Badge, Button, DemoStateControl, StateView } from "@/components/shared/ui";
 import type { HumanCase, LoadState, Priority } from "@/types";
+import { getApiBaseUrl } from "@/lib/api";
 
 type Scope = "all" | "mine" | "unassigned";
 type SlaFilter = "all" | "soon" | "overdue";
 const priorityTone: Record<Priority, "danger" | "warning" | "info" | "neutral"> = { P0: "danger", P1: "warning", P2: "info", P3: "neutral" };
 
-export function HumanLoopDashboard({ cases }: { cases: HumanCase[] }) {
-  const [items, setItems] = useState(cases);
-  const [state, setState] = useState<LoadState>("ready");
+export function HumanLoopDashboard({ cases: initialCases }: { cases: HumanCase[] }) {
+  const [items, setItems] = useState<HumanCase[]>([]);
+  const [state, setState] = useState<LoadState>("loading");
   const [priority, setPriority] = useState<Priority | "all">("all");
   const [scope, setScope] = useState<Scope>("all");
   const [sla, setSla] = useState<SlaFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
 
+  const fetchCases = async () => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/human-cases`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to fetch human cases");
+      const data = await response.json();
+      
+      const mapped: HumanCase[] = data.map((c: any) => {
+        let p: Priority = "P2";
+        if (c.priority === "HIGH" || c.priority === "P0") p = "P0";
+        else if (c.priority === "P1") p = "P1";
+        else if (c.priority === "P3") p = "P3";
+
+        let s: any = "Mở";
+        if (c.status === "RESOLVED") s = "Đã giải quyết";
+        else if (c.status === "IN_PROGRESS") s = "Đã phân công";
+
+        const createdDate = new Date(c.created_at);
+        const createdAtStr = createdDate.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+
+        const slaDate = new Date(c.sla_due_at);
+        const slaDueStr = slaDate.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+
+        return {
+          id: c.case_code,
+          patientName: c.patient ? c.patient.display_name : "Ẩn danh",
+          type: c.case_type || "Hỗ trợ y tế",
+          trigger: c.trigger || "",
+          priority: p,
+          createdAt: createdAtStr,
+          slaDue: slaDueStr,
+          owner: c.owner,
+          status: s,
+          slaDueAt: c.sla_due_at,
+        };
+      });
+
+      setItems(mapped);
+      setState(mapped.length === 0 ? "empty" : "ready");
+    } catch (err) {
+      console.error("Error fetching human cases from backend:", err);
+      setState("error");
+    }
+  };
+
+  useEffect(() => {
+    fetchCases();
+  }, []);
+
   const filtered = useMemo(() => items.filter((item) => {
     const priorityMatch = priority === "all" || item.priority === priority;
     const scopeMatch = scope === "all" || (scope === "mine" ? item.owner === "Lan Anh" : item.owner === null);
-    const [hours, minutes] = item.slaDue.split(":").map(Number);
-    const dueMinutes = hours * 60 + minutes;
-    const slaMatch = sla === "all" || (sla === "overdue" ? dueMinutes < 10 * 60 + 24 : dueMinutes >= 10 * 60 + 24 && dueMinutes <= 10 * 60 + 54);
+    
+    // SLA matching: compare dynamically using slaDueAt and system time
+    let slaMatch = true;
+    if (sla !== "all" && item.slaDueAt) {
+      const now = new Date().getTime();
+      const dueTime = new Date(item.slaDueAt).getTime();
+      const isOverdue = dueTime < now;
+      const isSoon = !isOverdue && (dueTime - now) <= 30 * 60 * 1000; // within 30 minutes
+      slaMatch = sla === "overdue" ? isOverdue : isSoon;
+    }
+    
     return priorityMatch && scopeMatch && slaMatch;
   }), [items, priority, scope, sla]);
+
   const openCasesCount = useMemo(() => items.filter((item) => item.status !== "Đã giải quyết").length, [items]);
   const unassignedCasesCount = useMemo(() => items.filter((item) => !item.owner).length, [items]);
   const p0UnassignedCount = useMemo(() => items.filter((item) => item.priority === "P0" && !item.owner).length, [items]);
@@ -33,15 +91,41 @@ export function HumanLoopDashboard({ cases }: { cases: HumanCase[] }) {
   const selected = useMemo(() => items.find((item) => item.id === selectedId) ?? null, [items, selectedId]);
   const mineCount = useMemo(() => items.filter((item) => item.owner === "Lan Anh").length, [items]);
 
-  const updateCase = (id: string, patch: Partial<HumanCase>, message: string) => {
-    setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
-    setNotice(message);
+  const updateCase = async (id: string, patch: Partial<HumanCase>, message: string) => {
+    try {
+      const body: any = {};
+      if (patch.status) {
+        if (patch.status === "Đã giải quyết") body.status = "RESOLVED";
+        else if (patch.status === "Đã phân công") body.status = "IN_PROGRESS";
+        else body.status = patch.status;
+      }
+      if (patch.owner !== undefined) {
+        body.owner = patch.owner;
+      }
+      if (patch.priority) {
+        body.priority = patch.priority;
+      }
+
+      const response = await fetch(`${getApiBaseUrl()}/api/human-cases/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) throw new Error("Failed to update case in database");
+      
+      await fetchCases();
+      setNotice(message);
+    } catch (err) {
+      console.error(err);
+      setNotice("Lỗi: Không thể đồng bộ trạng thái can thiệp với Database.");
+    }
   };
 
-  const assignToMe = (item: HumanCase) => updateCase(item.id, { owner: "Lan Anh", status: "Đã phân công" }, `${item.id} đã được phân công cho Lan Anh trong phiên mô phỏng.`);
+  const assignToMe = (item: HumanCase) => updateCase(item.id, { owner: "Lan Anh", status: "Đã phân công" }, `${item.id} đã được phân công cho Lan Anh.`);
 
   return <>
-    <div className="staff-page-heading"><div><span className="breadcrumb">Vận hành <Icon name="chevron" size={13}/> Can thiệp của nhân viên</span><h1>Hàng đợi xử lý yêu cầu</h1><p>Phân loại theo mức ưu tiên, nhận xử lý và hoàn tất yêu cầu trong cùng một màn hình.</p></div><div className="heading-actions"><DemoStateControl state={state} setState={setState}/><Button icon="refresh" variant="secondary" onClick={() => setNotice("Đã đồng bộ hàng đợi lúc 10:24 · Dữ liệu mô phỏng")}>Làm mới</Button></div></div>
+    <div className="staff-page-heading"><div><span className="breadcrumb">Vận hành <Icon name="chevron" size={13}/> Can thiệp của nhân viên</span><h1>Hàng đợi xử lý yêu cầu</h1><p>Phân loại theo mức ưu tiên, nhận xử lý và hoàn tất yêu cầu trong cùng một màn hình.</p></div><div className="heading-actions"><DemoStateControl state={state} setState={setState}/><Button icon="refresh" variant="secondary" onClick={() => { fetchCases(); setNotice("Đã đồng bộ hàng đợi với database thành công."); }}>Làm mới</Button></div></div>
 
     <section className="case-metrics" aria-label="Tổng quan yêu cầu"><article><span className="case-metric-icon blue"><Icon name="file"/></span><p><small>Yêu cầu đang mở</small><strong>{openCasesCount}</strong><em>Trong hàng đợi hiện tại</em></p></article><article><span className="case-metric-icon violet"><Icon name="user"/></span><p><small>Chưa phân công</small><strong>{unassignedCasesCount}</strong><em>Cần người tiếp nhận</em></p></article><article><span className="case-metric-icon red"><Icon name="alert"/></span><p><small>P0 chưa xác nhận</small><strong>{p0UnassignedCount}</strong><em>Xử lý ngay</em></p></article><article><span className="case-metric-icon amber"><Icon name="clock"/></span><p><small>Sắp quá thời hạn</small><strong>2</strong><em>Trong 30 phút tới</em></p></article><article><span className="case-metric-icon green"><Icon name="check"/></span><p><small>Đã giải quyết</small><strong>{resolvedCasesCount}</strong><em>Trong phiên mô phỏng</em></p></article></section>
 

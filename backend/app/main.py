@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.routes import appointments, chat, doctors, documents, speech, visits
+from backend.app.routes import appointments, chat, doctors, documents, speech, visits, human_cases
 from backend.app.database import engine
 from backend.app.models import Base
 
@@ -33,6 +33,7 @@ app.include_router(appointments.router)
 app.include_router(visits.router)
 app.include_router(doctors.router)
 app.include_router(speech.router)
+app.include_router(human_cases.router)
 
 @app.get("/")
 def read_root():

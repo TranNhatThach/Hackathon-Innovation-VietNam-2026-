@@ -113,11 +113,14 @@ For cardiovascular symptoms (e.g., chest pain, acute dyspnea, loss of consciousn
 
 ```filepath
 ├── FE/                              # React + Next.js App Router Frontend
-│   ├── app/                         # App page routing (patient homepage, appointments, companion)
+│   ├── app/                         # App page routing
 │   │   ├── appointments/            # Booking registration page
 │   │   ├── assistant/               # Patient AI FAQ chatbot page
-│   │   ├── visit/                   # Live queue status and room tracking (Companion)
+│   │   ├── check-in/                # Patient self check-in flow page
+│   │   ├── patient/                 # Patient portal (medications, reminders & profile)
+│   │   ├── procedures/              # Hospital outpatient admission guidelines (QT.25.01)
 │   │   ├── staff/                   # Internal staff operations workspace & Kanban board
+│   │   ├── visit/                   # Live queue status & patient companion page
 │   │   └── globals.css              # Custom styled premium CSS (glassmorphism & responsive)
 │   ├── components/                  # Shared React components (chat, panels, shells)
 │   ├── hooks/
@@ -126,12 +129,16 @@ For cardiovascular symptoms (e.g., chest pain, acute dyspnea, loss of consciousn
 ├── backend/                         # FastAPI Application server
 │   └── app/
 │       ├── routes/
+│       │   ├── appointments.py      # Bookings and reservations endpoints
 │       │   ├── chat.py              # Multi-agent chat router (patient FAQ / internal staff helper)
+│       │   ├── doctors.py           # Doctor schedules query endpoints
+│       │   ├── documents.py         # RAG PDF/Markdown uploader & parser
+│       │   ├── human_cases.py       # Human takeover and escalation routing
 │       │   ├── speech.py            # Text-To-Speech FPT AI Factory proxy endpoint
-│       │   └── documents.py         # RAG PDF/Markdown uploader & parser
+│       │   └── visits.py            # Live queue / Companion journey tracking endpoints
 │       ├── database.py              # PostgreSQL database engine and session
 │       ├── models.py                # SQL Alchemy schemas (conversations & messages)
-│       ├── security.py              # Symmetic column-level encryption functions
+│       ├── security.py              # Symmetric column-level encryption functions
 │       ├── worker.py                # Background asyncio medication/appointment reminder loop
 │       └── services.py              # DB operation services (conversation history persistence)
 ├── agent/                           # Google ADK 2.0 Inspired Agent core

@@ -13,7 +13,7 @@ const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false, load
 const topics = ["Giấy tờ khám BHYT", "Đặt lịch khám", "Quy trình khám lần đầu", "Lấy kết quả", "Lĩnh thuốc", "Chỉ đường trong viện"];
 type Message = { role: "user" | "assistant"; content: string };
 
-const escalationKeywords = ["không tìm thấy", "không có thông tin", "chưa có thông tin", "hotline", "tổng đài", "024 3942 2430", "nhân viên y tế", "liên hệ trực tiếp", "không hỗ trợ", "vui lòng gọi", "lỗi", "kết nối"];
+const escalationKeywords = ["không tìm thấy", "không có thông tin", "chưa có thông tin", "hotline", "tổng đài", "19001082", "nhân viên y tế", "liên hệ trực tiếp", "không hỗ trợ", "vui lòng gọi", "lỗi", "kết nối"];
 const shouldShowSupport = (text: string) => escalationKeywords.some((keyword) => text.toLowerCase().includes(keyword));
 
 export function PatientFaq({ initialQuestion = "" }: { initialQuestion?: string }) {

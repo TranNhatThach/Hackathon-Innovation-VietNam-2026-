@@ -51,6 +51,7 @@ export function HumanLoopDashboard({ cases: initialCases }: { cases: HumanCase[]
           slaDue: slaDueStr,
           owner: c.owner,
           status: s,
+          slaDueAt: c.sla_due_at,
         };
       });
 
@@ -70,12 +71,15 @@ export function HumanLoopDashboard({ cases: initialCases }: { cases: HumanCase[]
     const priorityMatch = priority === "all" || item.priority === priority;
     const scopeMatch = scope === "all" || (scope === "mine" ? item.owner === "Lan Anh" : item.owner === null);
     
-    // SLA matching: safely handle time format (HH:MM)
-    const timeParts = item.slaDue.split(":");
-    const hours = Number(timeParts[0]) || 0;
-    const minutes = Number(timeParts[1]) || 0;
-    const dueMinutes = hours * 60 + minutes;
-    const slaMatch = sla === "all" || (sla === "overdue" ? dueMinutes < 10 * 60 + 24 : dueMinutes >= 10 * 60 + 24 && dueMinutes <= 10 * 60 + 54);
+    // SLA matching: compare dynamically using slaDueAt and system time
+    let slaMatch = true;
+    if (sla !== "all" && item.slaDueAt) {
+      const now = new Date().getTime();
+      const dueTime = new Date(item.slaDueAt).getTime();
+      const isOverdue = dueTime < now;
+      const isSoon = !isOverdue && (dueTime - now) <= 30 * 60 * 1000; // within 30 minutes
+      slaMatch = sla === "overdue" ? isOverdue : isSoon;
+    }
     
     return priorityMatch && scopeMatch && slaMatch;
   }), [items, priority, scope, sla]);

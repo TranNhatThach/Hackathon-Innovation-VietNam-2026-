@@ -29,6 +29,7 @@ export interface HumanCase {
   slaDue: string;
   owner: string | null;
   status: "Mở" | "Đã phân công" | "Đang xử lý" | "Đã chuyển cấp" | "Đã giải quyết";
+  slaDueAt?: string;
   responsibleRole?: string;
   staffActions?: string[];
   note?: string;

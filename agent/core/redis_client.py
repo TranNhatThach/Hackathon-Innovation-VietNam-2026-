@@ -1,5 +1,6 @@
 import os
 import logging
+import time
 import redis
 from hashlib import sha256
 from dotenv import load_dotenv
@@ -16,9 +17,11 @@ class RedisCache:
         self.redis_url = redis_url
         self.client = None
         self.enabled = False
+        self.last_attempt = 0.0
         self._init_client()
 
     def _init_client(self):
+        self.last_attempt = time.time()
         try:
             # Connect with short timeouts to avoid blocking the main thread if Redis is offline
             self.client = redis.from_url(
@@ -37,7 +40,11 @@ class RedisCache:
 
     def get(self, key: str) -> str | None:
         if not self.enabled or not self.client:
-            return None
+            if time.time() - self.last_attempt > 60:
+                logger.info("Attempting to reconnect to Redis cache...")
+                self._init_client()
+            if not self.enabled or not self.client:
+                return None
         try:
             val = self.client.get(key)
             if val:
@@ -50,7 +57,11 @@ class RedisCache:
     def set(self, key: str, value: str, ex: int = 900) -> bool:
         """Sets a key in Redis with an optional TTL (default 15 minutes / 900s)"""
         if not self.enabled or not self.client:
-            return False
+            if time.time() - self.last_attempt > 60:
+                logger.info("Attempting to reconnect to Redis cache...")
+                self._init_client()
+            if not self.enabled or not self.client:
+                return False
         try:
             return bool(self.client.set(key, value, ex=ex))
         except Exception as e:
